@@ -35,6 +35,7 @@ from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import to_numpy
 from src.patchcore.preprocess import pca_from_state
 from src.patchcore.query_adaptive import QueryAdaptivePatchCore
+from src.patchcore.learned_router import router_from_state
 from src.patchcore.routing import RoutingIndex
 from src.utils.io import load_patchcore
 from src.utils.provenance import RUN_RESULT_SCHEMA_VERSION, build_run_manifest, dataset_reference, manifest_path_for_target, state_dict_sha256, write_run_manifest
@@ -50,11 +51,17 @@ def iter_images(root: Path):
             yield p
 
 
-def load_routing(model_dir: Path) -> tuple[RoutingIndex, RoutingIndex]:
+def load_routing(model_dir: Path) -> tuple[RoutingIndex, RoutingIndex, dict | None]:
     npz = np.load(model_dir / "routing_state.npz", allow_pickle=True)
     patch = RoutingIndex(mode="patch", centroids=npz["patch_centroids"].astype(np.float32), members=list(npz["patch_members"]))
     image = RoutingIndex(mode="image", centroids=npz["image_centroids"].astype(np.float32), members=list(npz["image_members"]))
-    return patch, image
+    learned = None
+    if "patch_router_W" in npz.files:
+        learned = {
+            "patch": {"W": npz["patch_router_W"].astype(np.float32), "b": npz["patch_router_b"].astype(np.float32)},
+            "image": {"W": npz["image_router_W"].astype(np.float32), "b": npz["image_router_b"].astype(np.float32)},
+        }
+    return patch, image, learned
 
 
 def main() -> None:
@@ -63,6 +70,7 @@ def main() -> None:
     ap.add_argument("--images", required=True)
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--routing", choices=["patch", "image"], default="patch")
+    ap.add_argument("--router", choices=["kmeans", "learned"], default="kmeans", help="How to choose clusters: distance-to-centroid or learned linear router")
     ap.add_argument("--probes", type=int, default=1)
     ap.add_argument("--out", default="outputs/routed_scores.jsonl")
     args = ap.parse_args()
@@ -72,8 +80,14 @@ def main() -> None:
     cfg = artifact.cfg
 
     pca = pca_from_state(artifact.pca_state) if artifact.pca_state is not None else None
-    patch_routing, image_routing = load_routing(model_dir)
+    patch_routing, image_routing, learned_state = load_routing(model_dir)
     routing = patch_routing if args.routing == "patch" else image_routing
+
+    learned_router = None
+    if args.router == "learned":
+        if learned_state is None:
+            raise SystemExit("Model has no learned router; refit with --learned-router")
+        learned_router = router_from_state(learned_state[args.routing])
 
     qapc = QueryAdaptivePatchCore(memory=artifact.memory_bank, routing=routing, metric=cfg.distance_metric, pca=pca)
 
@@ -130,7 +144,13 @@ def main() -> None:
                 if args.routing == "image":
                     img_emb = emb0.mean(axis=0, keepdims=True)
                     # candidates computed once; apply to all patches
-                    cand = qapc.candidate_indices_for_queries(img_emb, probes=int(args.probes))[0]
+                    if learned_router is None:
+                        cand = qapc.candidate_indices_for_queries(img_emb, probes=int(args.probes))[0]
+                    else:
+                        # learned router chooses clusters directly
+                        Xr = img_emb if pca is None else pca.transform(img_emb)
+                        clusters = learned_router.topk(Xr, int(args.probes))[0]
+                        cand = np.unique(np.concatenate([routing.members[int(c)] for c in clusters.tolist()]))
                     # brute force within this candidate set for every patch
                     # (compute distances patch-by-candidate)
                     # For now we do per patch knn using same qapc routing by temporarily overriding members.
@@ -140,7 +160,26 @@ def main() -> None:
                     tmp = QueryAdaptivePatchCore(memory=qapc.memory, routing=RoutingIndex(mode="patch", centroids=qapc.routing.centroids[:1], members=[cand]), metric=qapc.metric, pca=qapc.pca)
                     scores = tmp.score_patches(emb0, probes=1)
                 else:
-                    scores = qapc.score_patches(emb0, probes=int(args.probes))
+                    if learned_router is None:
+                        scores = qapc.score_patches(emb0, probes=int(args.probes))
+                    else:
+                        # route each patch via learned router
+                        Xr = emb0 if pca is None else pca.transform(emb0)
+                        clusters = learned_router.topk(Xr, int(args.probes))  # [P, probes]
+                        # build candidate sets per patch
+                        dists = np.empty((Xr.shape[0],), dtype=np.float32)
+                        for pi in range(Xr.shape[0]):
+                            cand = np.unique(np.concatenate([routing.members[int(c)] for c in clusters[pi].tolist()]))
+                            if cand.size == 0:
+                                dists[pi] = np.inf
+                                continue
+                            # brute-force distances to candidates
+                            Ym = artifact.memory_bank[cand]
+                            # memory already in routed space if PCA enabled
+                            diff = Ym - Xr[pi : pi + 1]
+                            d2 = np.sum(diff * diff, axis=1)
+                            dists[pi] = float(np.sqrt(max(0.0, float(np.min(d2)))))
+                        scores = dists
 
                 s_img = float(np.max(scores)) if cfg.image_score == "max" else float(np.mean(scores))
 
@@ -148,6 +187,7 @@ def main() -> None:
                     "path": str(p),
                     "score": s_img,
                     "routing": args.routing,
+                    "router": args.router,
                     "probes": int(args.probes),
                     "run_id": manifest["run_id"],
                     "schema_version": RUN_RESULT_SCHEMA_VERSION,

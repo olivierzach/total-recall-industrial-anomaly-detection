@@ -45,7 +45,8 @@ from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.memory_bank import flatten_embeddings_with_metadata
 from src.patchcore.patchcore import to_numpy
 from src.patchcore.preprocess import fit_pca, pca_state
-from src.patchcore.routing import build_image_routing, build_patch_routing
+from src.patchcore.learned_router import fit_linear_router, router_state
+from src.patchcore.routing import assign_to_centroids, build_image_routing, build_patch_routing
 from src.utils.io import save_patchcore
 from src.utils.provenance import (
     RUN_MANIFEST_SCHEMA_VERSION,
@@ -108,6 +109,11 @@ def main() -> None:
     ap.add_argument("--patch-clusters", type=int, default=128)
     ap.add_argument("--image-clusters", type=int, default=32)
     ap.add_argument("--kmeans-iters", type=int, default=15)
+
+    ap.add_argument("--learned-router", action="store_true", help="Also train a tiny linear router to predict cluster IDs")
+    ap.add_argument("--router-iters", type=int, default=200)
+    ap.add_argument("--router-l2", type=float, default=1.0)
+    ap.add_argument("--router-lr", type=float, default=0.1)
 
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
@@ -189,18 +195,51 @@ def main() -> None:
     patch_routing = build_patch_routing(X_for_routing, n_clusters=int(args.patch_clusters), iters=int(args.kmeans_iters), rng=rng)
     image_routing = build_image_routing(imgX_for_routing, image_to_patch_indices, n_clusters=int(args.image_clusters), iters=int(args.kmeans_iters), rng=rng)
 
+    # Optional learned routers (predict cluster IDs from embeddings).
+    learned = None
+    if bool(args.learned_router):
+        patch_y = assign_to_centroids(X_for_routing, patch_routing.centroids, metric="euclidean")
+        image_y = assign_to_centroids(imgX_for_routing, image_routing.centroids, metric="euclidean")
+        patch_router = fit_linear_router(
+            X_for_routing,
+            patch_y,
+            iters=int(args.router_iters),
+            l2=float(args.router_l2),
+            lr=float(args.router_lr),
+            rng=rng,
+        )
+        image_router = fit_linear_router(
+            imgX_for_routing,
+            image_y,
+            iters=int(args.router_iters),
+            l2=float(args.router_l2),
+            lr=float(args.router_lr),
+            rng=rng,
+        )
+        learned = {
+            "patch": router_state(patch_router),
+            "image": router_state(image_router),
+        }
+
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Save routing state.
-    np.savez(
-        out_dir / "routing_state.npz",
+    # Note: object arrays require allow_pickle=True at load.
+    save_kwargs = dict(
         patch_centroids=patch_routing.centroids,
         image_centroids=image_routing.centroids,
-        # store members as object arrays (lists of arrays)
         patch_members=np.array(patch_routing.members, dtype=object),
         image_members=np.array(image_routing.members, dtype=object),
     )
+    if learned is not None:
+        save_kwargs.update(
+            patch_router_W=np.asarray(learned["patch"]["W"], dtype=np.float32),
+            patch_router_b=np.asarray(learned["patch"]["b"], dtype=np.float32),
+            image_router_W=np.asarray(learned["image"]["W"], dtype=np.float32),
+            image_router_b=np.asarray(learned["image"]["b"], dtype=np.float32),
+        )
+    np.savez(out_dir / "routing_state.npz", **save_kwargs)
     (out_dir / "routing_state.json").write_text(
         json.dumps(
             {
@@ -208,6 +247,13 @@ def main() -> None:
                 "image_clusters": int(image_routing.centroids.shape[0]),
                 "metric": cfg.distance_metric,
                 "pca": {"enabled": bool(pca is not None), "dim": int(cfg.pca_dim), "whiten": bool(cfg.pca_whiten)},
+                "learned_router": {
+                    "enabled": bool(learned is not None),
+                    "kind": "linear_softmax",
+                    "router_iters": int(args.router_iters),
+                    "router_l2": float(args.router_l2),
+                    "router_lr": float(args.router_lr),
+                },
             },
             indent=2,
             sort_keys=True,

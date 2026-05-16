@@ -10,7 +10,11 @@ This is analogous to RAG: retrieve candidates, then do the expensive comparison 
 
 ## What we implement
 
-We implement an IVF-like routing index using k-means clustering.
+We implement an IVF-like routing index using k-means clustering, plus an optional **learned router**.
+
+Two router types:
+- **kmeans router**: choose clusters by distance/similarity to centroids (standard IVF).
+- **learned router**: a tiny linear softmax classifier trained to predict the k-means cluster ID from the embedding. This is a distillation of the k-means routing rule into a fast parametric function.
 
 ### Patch routing
 - Cluster nominal *patch embeddings* into K clusters.
@@ -42,6 +46,10 @@ Use:
 Routing modes:
 - `--routing patch`
 - `--routing image`
+
+Router types:
+- `--router kmeans` (default)
+- `--router learned` (requires fitting with `--learned-router`)
 
 Key knob:
 - `--probes r` (multi-probe; helps avoid cluster-boundary misses)
