@@ -32,4 +32,5 @@ Mac mini note:
 
 Start here:
 - `docs/PLAN.md`
+- `docs/CORE_READING.md` (what to read to understand/apply PatchCore)
 - `docs/RELATED_WORK.md`

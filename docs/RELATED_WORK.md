@@ -2,6 +2,8 @@
 
 Core setting: **nominal-only training**, detect + localize anomalies at test time.
 
+For a curated “what to read to apply PatchCore” list, see: `docs/CORE_READING.md`.
+
 ## Patch-based embedding + kNN family
 - **PatchCore** (Roth et al., CVPR 2022): https://arxiv.org/abs/2106.08265
 - **PaDiM** (Defard et al., ICPR 2021): probabilistic modeling over patch embeddings
