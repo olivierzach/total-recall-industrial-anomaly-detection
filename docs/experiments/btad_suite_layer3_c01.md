@@ -64,11 +64,37 @@ Key results (see JSON for full detail):
 Timing notes:
 - coreset selection dominates runtime (naive O(kN) farthest-first).
 
-### 2) kNN cosine (running)
-- output: `knn_cosine.json`
+### 2) kNN cosine (completed)
 
-### 3) PCA(256)+whiten + euclidean (running)
-- output: `knn_pca256_euclidean.json`
+Output:
+- `outputs/rigor/btad_suite_layer3_c01/knn_cosine.json`
+
+Key results:
+- image AUROC: 0.8812
+- pixel AUROC: 0.7878
+- PRO AUC: 0.2134
+- operational (calibrated on nominal holdout):
+  - recall: 0.6034
+  - achieved test FPR: 0.0133
+  - threshold: 0.2181
+
+### 3) PCA(256)+whiten + euclidean (completed)
+
+Output:
+- `outputs/rigor/btad_suite_layer3_c01/knn_pca256_euclidean.json`
+
+Key results:
+- image AUROC: 0.8761
+- pixel AUROC: 0.7790
+- PRO AUC: 0.2067
+- operational (calibrated on nominal holdout):
+  - recall: 0.5655
+  - achieved test FPR: 0.0044
+  - threshold: 23.9661
+
+Timing highlight:
+- PCA reduced coreset time dramatically vs naive k-center on raw embeddings.
+  - coreset_s: 339s (PCA256) vs 1275s (euclidean baseline)
 
 ## Notes / caveats
 
