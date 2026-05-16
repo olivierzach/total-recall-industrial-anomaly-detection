@@ -33,6 +33,7 @@ Mac mini note:
 Start here:
 - `docs/PLAN.md`
 - `docs/CORE_READING.md` (what to read to understand/apply PatchCore)
+- `docs/PATCHCORE_VS_LLM.md` (trade-offs: PatchCore memory bank vs. LLM/VLM one-shot)
 - `docs/INDUSTRIAL_RIGOR_CHECKLIST.md` (how to ship/present with rigor)
 - `docs/EVAL_PROTOCOL.md`
 - `docs/BASELINE_LADDER.md`
