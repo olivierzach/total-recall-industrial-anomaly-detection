@@ -1,0 +1,25 @@
+[project]
+name = "total-recall-iad"
+version = "0.0.1"
+description = "Local implementation + experiments for PatchCore (Towards Total Recall in Industrial Anomaly Detection)."
+requires-python = ">=3.10"
+readme = "README.md"
+
+dependencies = [
+  "torch",
+  "torchvision",
+  "numpy",
+  "scikit-learn",
+  "tqdm",
+  "pillow",
+  "matplotlib",
+  "pandas",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+faiss = ["faiss-cpu"]
+dev = ["ruff", "pytest"]
+
+[tool.ruff]
+line-length = 120
