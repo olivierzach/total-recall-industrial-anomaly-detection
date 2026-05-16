@@ -56,6 +56,8 @@ def main() -> None:
     ap.add_argument("--no-pca-whiten", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threshold", type=str, default=None, help="Optional threshold artifact JSON for operational metrics")
+    ap.add_argument("--target-fpr", type=float, default=0.01, help="If no --threshold is provided, calibrate threshold to this FPR on held-out nominal")
+    ap.add_argument("--calib-fraction", type=float, default=0.2, help="Fraction of nominal train images held out for threshold calibration")
     ap.add_argument("--max-train", type=int, default=0, help="If set, cap number of nominal train images for a smoke run")
     ap.add_argument("--max-test", type=int, default=0, help="If set, cap number of test images for a smoke run")
     ap.add_argument("--log-every", type=int, default=25, help="Progress logging cadence (batches)")
@@ -82,11 +84,33 @@ def main() -> None:
         ]
     )
 
-    train_ds = MVTecADDataset(args.mvtec_root, args.category, "train", transform=tfm)
+    train_ds_all = MVTecADDataset(args.mvtec_root, args.category, "train", transform=tfm)
     test_ds = MVTecADDataset(args.mvtec_root, args.category, "test", transform=tfm)
+
+    # Deterministic split of nominal train into memory-build and calibration sets.
+    # Calibration set is used only to set an operating threshold at a target FPR.
+    n_train = len(train_ds_all)
+    frac = float(args.calib_fraction)
+    if not (0.0 <= frac < 1.0):
+        raise ValueError("--calib-fraction must be in [0,1)")
+    n_calib = int(round(frac * n_train))
+    n_mem = max(1, n_train - n_calib)
+
+    mem_indices = list(range(0, n_mem))
+    calib_indices = list(range(n_mem, n_train))
+
+    from torch.utils.data import Subset
+
+    train_ds = Subset(train_ds_all, mem_indices)
+    calib_ds = Subset(train_ds_all, calib_indices) if n_calib > 0 else None
 
     train_dl = DataLoader(train_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
     test_dl = DataLoader(test_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
+    calib_dl = (
+        DataLoader(calib_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
+        if calib_ds is not None
+        else None
+    )
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
     backbone_hash = state_dict_sha256(backbone.state_dict())
@@ -169,8 +193,17 @@ def main() -> None:
     y_true = np.asarray(y_true)
     y_score = np.asarray(y_score)
     image_auroc = auroc(y_true, y_score)
+    # Threshold calibration for operational metrics.
     threshold_eval = None
     input_artifacts = []
+
+    def _calibrate_threshold_from_nominal(calib_scores: np.ndarray, target_fpr: float) -> float:
+        # Choose threshold at (1 - target_fpr) quantile of nominal scores.
+        # This yields approximately target_fpr false positives on nominal.
+        q = float(1.0 - float(target_fpr))
+        q = min(max(q, 0.0), 1.0)
+        return float(np.quantile(calib_scores, q))
+
     if args.threshold:
         thr = load_threshold_artifact(args.threshold)
         threshold_eval = classification_metrics(y_true, y_score, thr.threshold)
@@ -178,10 +211,46 @@ def main() -> None:
         if thr.source_run_id is not None:
             threshold_eval["source_run_id"] = thr.source_run_id
         input_artifacts.append(artifact_reference(args.threshold, role="threshold", kind="threshold_artifact"))
+    else:
+        # Calibrate using held-out nominal images from the train split.
+        if calib_dl is None:
+            raise ValueError("No calibration split available; set --calib-fraction > 0 or provide --threshold")
+        calib_scores = []
+        with torch.no_grad():
+            for batch in calib_dl:
+                x = batch.image.to(device)  # type: ignore
+                emb = extract_patch_embeddings(
+                    backbone_name=cfg.backbone,
+                    model=backbone,
+                    hooks=hooks,
+                    x=x,
+                    layers=cfg.layers,
+                    l2_normalize=cfg.l2_normalize,
+                    return_hw=False,
+                )
+                if isinstance(emb, tuple):
+                    emb = emb[0]
+                emb = to_numpy(emb)
+                for i in range(emb.shape[0]):
+                    calib_scores.append(model.score_image(emb[i]))
+        calib_scores = np.asarray(calib_scores, dtype=np.float64)
+        thr = _calibrate_threshold_from_nominal(calib_scores, float(args.target_fpr))
+        threshold_eval = classification_metrics(y_true, y_score, thr)
+        threshold_eval["source"] = "calibrated_from_nominal_train_holdout"
+        threshold_eval["target_fpr"] = float(args.target_fpr)
+        threshold_eval["calib_fraction"] = float(args.calib_fraction)
+        threshold_eval["calib_n"] = int(calib_scores.shape[0])
 
-    train_items = train_ds._items[:n_train_seen]  # type: ignore[attr-defined]
+    # Files for provenance: use the underlying MVTec dataset items + our deterministic split indices.
+    train_items_all = train_ds_all._items  # type: ignore[attr-defined]
+    mem_items = [train_items_all[i] for i in mem_indices[:n_train_seen]]
+    calib_items = [train_items_all[i] for i in calib_indices] if calib_indices else []
     test_items = test_ds._items[:n_test_seen]  # type: ignore[attr-defined]
-    train_files = [Path(p) for (p, _, _) in train_items]
+
+    train_files = [Path(p) for (p, _, _) in mem_items]
+    if calib_items:
+        train_files.extend(Path(p) for (p, _, _) in calib_items)
+
     test_files = [Path(p) for (p, _, mask_path) in test_items]
     test_files.extend(Path(mask_path) for (_, _, mask_path) in test_items if mask_path is not None)
     manifest_path = manifest_path_for_target(args.out)

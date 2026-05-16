@@ -38,8 +38,19 @@ from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc, classification_metrics
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.patchcore.preprocess import fit_pca
 from src.patchcore.pro import compute_pro_auc
 from src.utils.io import load_threshold_artifact
+from src.utils.provenance import (
+    RUN_RESULT_SCHEMA_VERSION,
+    add_outputs,
+    artifact_reference,
+    build_run_manifest,
+    dataset_reference,
+    manifest_path_for_target,
+    state_dict_sha256,
+    write_run_manifest,
+)
 from src.utils.random import make_numpy_rng, set_global_seed
 
 
@@ -77,6 +88,11 @@ def main() -> None:
     ap.add_argument("--log-every", type=int, default=50, help="Progress logging cadence (batches)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threshold", type=str, default=None, help="Optional threshold artifact JSON for operational metrics")
+    ap.add_argument("--target-fpr", type=float, default=0.01, help="If no --threshold is provided, calibrate threshold to this FPR on held-out nominal")
+    ap.add_argument("--calib-fraction", type=float, default=0.2, help="Fraction of nominal train images held out for threshold calibration")
+    ap.add_argument("--distance-metric", type=str, default="euclidean", choices=["euclidean", "cosine"])
+    ap.add_argument("--pca-dim", type=int, default=0)
+    ap.add_argument("--no-pca-whiten", action="store_true")
     args = ap.parse_args()
     set_global_seed(int(args.seed))
 
@@ -88,6 +104,9 @@ def main() -> None:
         coreset_ratio=float(args.coreset_ratio),
         num_neighbors=int(args.num_neighbors),
         image_score=str(args.image_score),
+        distance_metric=str(args.distance_metric),
+        pca_dim=int(args.pca_dim),
+        pca_whiten=not bool(args.no_pca_whiten),
     )
 
     device = torch.device(args.device)
@@ -106,8 +125,24 @@ def main() -> None:
         ]
     )
 
-    train_ds = BTADDataset(args.btad_root, "train", transform=tfm, mask_transform=mtfm)
+    train_ds_all = BTADDataset(args.btad_root, "train", transform=tfm, mask_transform=mtfm)
     test_ds = BTADDataset(args.btad_root, "test", transform=tfm, mask_transform=mtfm)
+
+    # Deterministic split of nominal train into memory-build and calibration.
+    n_train = len(train_ds_all)
+    frac = float(args.calib_fraction)
+    if not (0.0 <= frac < 1.0):
+        raise ValueError("--calib-fraction must be in [0,1)")
+    n_calib = int(round(frac * n_train))
+    n_mem = max(1, n_train - n_calib)
+
+    mem_indices = list(range(0, n_mem))
+    calib_indices = list(range(n_mem, n_train))
+
+    from torch.utils.data import Subset
+
+    train_ds = Subset(train_ds_all, mem_indices)
+    calib_ds = Subset(train_ds_all, calib_indices) if n_calib > 0 else None
 
     train_dl = DataLoader(
         train_ds,
@@ -123,8 +158,14 @@ def main() -> None:
         num_workers=int(args.num_workers),
         collate_fn=collate_batch,
     )
+    calib_dl = (
+        DataLoader(calib_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
+        if calib_ds is not None
+        else None
+    )
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
+    backbone_hash = state_dict_sha256(backbone.state_dict())
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     timing = {
@@ -177,13 +218,20 @@ def main() -> None:
 
     X = np.concatenate(nominal_patches, axis=0)
 
-    t0 = time.time()
-    idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
-    timing["coreset_s"] = time.time() - t0
-    Xc = X[idx]
+    # Optional PCA whitening (fit on nominal patches).
+    pca = None
+    X_for_nn = X
+    if cfg.pca_dim and int(cfg.pca_dim) > 0:
+        pca = fit_pca(X, int(cfg.pca_dim), whiten=bool(cfg.pca_whiten))
+        X_for_nn = pca.transform(X)
 
     t0 = time.time()
-    model = PatchCoreModel.fit(cfg, Xc)
+    idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+    timing["coreset_s"] = time.time() - t0
+    Xc = X_for_nn[idx]
+
+    t0 = time.time()
+    model = PatchCoreModel.fit(cfg, Xc, pca=pca)
     timing["knn_fit_s"] = time.time() - t0
 
     y_true = []
@@ -265,18 +313,111 @@ def main() -> None:
         masks_2d = [px_true_arr[i] for i in range(px_true_arr.shape[0])]
         pro_auc = compute_pro_auc(scores_2d, masks_2d, fpr_limit=0.3, n_thresholds=200).pro_auc
     timing["metric_s"] = time.time() - t0
+    # Threshold calibration for operational metrics.
+    input_artifacts = []
+
+    def _calibrate_threshold_from_nominal(calib_scores: np.ndarray, target_fpr: float) -> float:
+        q = float(1.0 - float(target_fpr))
+        q = min(max(q, 0.0), 1.0)
+        return float(np.quantile(calib_scores, q))
+
     if args.threshold:
         thr = load_threshold_artifact(args.threshold)
         threshold_eval = classification_metrics(y_true, y_score, thr.threshold)
         threshold_eval["source"] = str(Path(args.threshold).resolve())
+        if thr.source_run_id is not None:
+            threshold_eval["source_run_id"] = thr.source_run_id
+        input_artifacts.append(artifact_reference(args.threshold, role="threshold", kind="threshold_artifact"))
+    else:
+        if calib_dl is None:
+            raise ValueError("No calibration split available; set --calib-fraction > 0 or provide --threshold")
+        calib_scores = []
+        with torch.no_grad():
+            for batch in calib_dl:
+                x = batch.image.to(device)  # type: ignore
+                emb = extract_patch_embeddings(
+                    backbone_name=cfg.backbone,
+                    model=backbone,
+                    hooks=hooks,
+                    x=x,
+                    layers=cfg.layers,
+                    l2_normalize=cfg.l2_normalize,
+                    return_hw=False,
+                )
+                if isinstance(emb, tuple):
+                    emb = emb[0]
+                emb = to_numpy(emb)
+                for i in range(emb.shape[0]):
+                    calib_scores.append(model.score_image(emb[i]))
+        calib_scores = np.asarray(calib_scores, dtype=np.float64)
+        thr = _calibrate_threshold_from_nominal(calib_scores, float(args.target_fpr))
+        threshold_eval = classification_metrics(y_true, y_score, thr)
+        threshold_eval["source"] = "calibrated_from_nominal_train_holdout"
+        threshold_eval["target_fpr"] = float(args.target_fpr)
+        threshold_eval["calib_fraction"] = float(args.calib_fraction)
+        threshold_eval["calib_n"] = int(calib_scores.shape[0])
 
     timing["total_s"] = time.time() - t_total0
 
+    # Files for provenance: use underlying BTAD dataset items + deterministic split indices.
+    train_items_all = train_ds_all._items  # type: ignore[attr-defined]
+    mem_items = [train_items_all[i] for i in mem_indices[:n_train_seen]]
+    calib_items = [train_items_all[i] for i in calib_indices] if calib_indices else []
+    test_items = test_ds._items[:n_test_seen]  # type: ignore[attr-defined]
+
+    train_files = [Path(p) for (p, _, ann_path) in mem_items]
+    train_files.extend(Path(ann_path) for (_, _, ann_path) in mem_items if ann_path is not None)
+    if calib_items:
+        train_files.extend(Path(p) for (p, _, ann_path) in calib_items)
+        train_files.extend(Path(ann_path) for (_, _, ann_path) in calib_items if ann_path is not None)
+
+    test_files = [Path(p) for (p, _, ann_path) in test_items]
+    test_files.extend(Path(ann_path) for (_, _, ann_path) in test_items if ann_path is not None)
+    manifest_path = manifest_path_for_target(args.out)
+    manifest = build_run_manifest(
+        kind="eval_btad_patchcore",
+        entrypoint="scripts/eval_btad_patchcore.py",
+        requested_device=str(args.device),
+        seed=int(args.seed),
+        config=asdict(cfg),
+        args=dict(vars(args)),
+        datasets=[
+            dataset_reference(
+                dataset="btad",
+                role="train",
+                root=args.btad_root,
+                files=train_files,
+                split="train",
+                selection={"n_images": n_train_seen, "max_train": int(args.max_train)},
+            ),
+            dataset_reference(
+                dataset="btad",
+                role="test",
+                root=args.btad_root,
+                files=test_files,
+                split="test",
+                selection={"n_images": n_test_seen, "max_test": int(args.max_test)},
+            ),
+        ],
+        inputs=input_artifacts,
+        extra={
+            "nominal_patches": int(X.shape[0]),
+            "coreset": int(Xc.shape[0]),
+            "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc, "pro_auc": pro_auc},
+            "backbone_sha256": backbone_hash,
+        },
+    )
+
     out = {
+        "schema_version": RUN_RESULT_SCHEMA_VERSION,
+        "run_id": manifest["run_id"],
+        "manifest_path": str(manifest_path.resolve()),
         "dataset": "btad",
+        "kind": "eval",
         "cfg": asdict(cfg),
-        "n_train": len(train_ds),
-        "n_test": len(test_ds),
+        "device": str(args.device),
+        "n_train": n_train_seen if args.max_train else len(train_ds),
+        "n_test": n_test_seen if args.max_test else len(test_ds),
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
         "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc, "pro_auc": pro_auc},
         "timing": timing,
@@ -288,6 +429,20 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, indent=2, sort_keys=True))
+    add_outputs(
+        manifest,
+        [
+            artifact_reference(
+                out_path,
+                role="evaluation",
+                kind="eval_result",
+                known_run_id=manifest["run_id"],
+                known_schema_version=RUN_RESULT_SCHEMA_VERSION,
+                known_manifest_path=str(manifest_path.resolve()),
+            )
+        ],
+    )
+    write_run_manifest(out_path, manifest)
     print(json.dumps(out, indent=2, sort_keys=True))
 
 
