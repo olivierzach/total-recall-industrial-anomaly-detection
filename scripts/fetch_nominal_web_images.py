@@ -12,8 +12,8 @@ Instead it:
 - accepts a list of page URLs, then
 - extracts candidate <img src> URLs from those pages and downloads them.
 
-Because OpenClaw already has a web_search tool in-chat, the intended workflow is:
-1) Use web_search in chat to find a few relevant pages.
+Typical workflow:
+1) Use a search engine or curated source list to find a few relevant pages.
 2) Run this script with --pages pointing at those URLs.
 
 Example:

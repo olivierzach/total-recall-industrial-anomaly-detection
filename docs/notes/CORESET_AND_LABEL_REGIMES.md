@@ -32,9 +32,9 @@ That means each nominal image is converted into many local feature vectors:
 
 In this repo, that happens in:
 
-- [embedding.py](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/src/patchcore/embedding.py)
-- [extract.py](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/src/patchcore/extract.py)
-- [patchcore.py](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/src/patchcore/patchcore.py)
+- [embedding.py](src/patchcore/embedding.py)
+- [extract.py](src/patchcore/extract.py)
+- [patchcore.py](src/patchcore/patchcore.py)
 
 So the memory bank size scales roughly like:
 
@@ -90,7 +90,7 @@ PatchCore therefore uses a **coreset approximation**:
 
 In this repo, that is implemented in:
 
-- [coreset.py](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/src/patchcore/coreset.py)
+- [coreset.py](src/patchcore/coreset.py)
 
 ### 2.4 What algorithm is being approximated
 
@@ -382,8 +382,8 @@ That is exactly why the known-failure memory-bank direction is attractive.
 
 We now have a local benchmark on real `MVTec bottle` data:
 
-- protocol doc: [HYBRID_EXPERIMENT_PLAN.md](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/docs/HYBRID_EXPERIMENT_PLAN.md)
-- current summary: [summary.md](/Users/statsparrot/.openclaw/workspace/projects/total-recall-industrial-anomaly-detection/outputs/hybrid_benchmark/mvtec_bottle/summary.md)
+- protocol doc: [HYBRID_EXPERIMENT_PLAN.md](docs/HYBRID_EXPERIMENT_PLAN.md)
+- current summary: [summary.md](outputs/hybrid_benchmark/mvtec_bottle/summary.md)
 
 The most important result is not the absolute AUROC. It is the tradeoff:
 
