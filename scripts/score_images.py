@@ -28,7 +28,7 @@ from PIL import Image
 from torchvision import transforms
 
 from src.patchcore.backbone import FeatureHooks, load_backbone
-from src.patchcore.embedding import patch_embeddings
+from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
 from src.utils.io import load_patchcore
 
@@ -65,7 +65,7 @@ def main() -> None:
     )
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
-    hooks = FeatureHooks(backbone, list(cfg.layers))
+    hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     model = PatchCoreModel.fit(cfg, memory)
 
@@ -81,9 +81,15 @@ def main() -> None:
             for p in iter_images(Path(args.images)):
                 img = Image.open(p).convert("RGB")
                 x = tfm(img).unsqueeze(0).to(device)
-                _ = backbone(x)
-                feats = hooks.pop()
-                emb, (H, W) = patch_embeddings(feats, cfg.layers, l2_normalize=cfg.l2_normalize, return_hw=True)  # type: ignore
+                emb, (H, W) = extract_patch_embeddings(
+                    backbone_name=cfg.backbone,
+                    model=backbone,
+                    hooks=hooks,
+                    x=x,
+                    layers=cfg.layers,
+                    l2_normalize=cfg.l2_normalize,
+                    return_hw=True,
+                )
                 emb0 = to_numpy(emb[0])
                 s = model.score_image(emb0)
                 rec = {"path": str(p), "score": float(s)}

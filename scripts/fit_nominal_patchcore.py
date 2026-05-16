@@ -30,7 +30,7 @@ from src.data.collate import collate_batch
 from src.patchcore import PatchCoreConfig
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.coreset import KCenterGreedy
-from src.patchcore.embedding import patch_embeddings
+from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import to_numpy
 from src.utils.io import save_patchcore
 
@@ -96,15 +96,23 @@ def main() -> None:
     dl = DataLoader(ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
-    hooks = FeatureHooks(backbone, list(cfg.layers))
+    hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     nominal_patches = []
     with torch.no_grad():
         for batch in dl:
             x = batch.image.to(device)
-            _ = backbone(x)
-            feats = hooks.pop()
-            emb = patch_embeddings(feats, cfg.layers, l2_normalize=cfg.l2_normalize)
+            emb = extract_patch_embeddings(
+                backbone_name=cfg.backbone,
+                model=backbone,
+                hooks=hooks,
+                x=x,
+                layers=cfg.layers,
+                l2_normalize=cfg.l2_normalize,
+                return_hw=False,
+            )
+            if isinstance(emb, tuple):
+                emb = emb[0]
             nominal_patches.append(to_numpy(emb.reshape(-1, emb.shape[-1])))
 
     X = np.concatenate(nominal_patches, axis=0)

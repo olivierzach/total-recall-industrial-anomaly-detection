@@ -20,7 +20,7 @@ from src.data.collate import collate_batch
 from src.patchcore import PatchCoreConfig
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.coreset import KCenterGreedy
-from src.patchcore.embedding import patch_embeddings
+from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
 
@@ -57,16 +57,24 @@ def main() -> None:
     test_dl = DataLoader(test_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
-    hooks = FeatureHooks(backbone, list(cfg.layers))
+    hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     # Build memory bank from nominal patches.
     nominal_patches = []
     with torch.no_grad():
         for batch in train_dl:
             x = batch.image.to(device)  # type: ignore
-            _ = backbone(x)
-            feats = hooks.pop()
-            emb = patch_embeddings(feats, cfg.layers, l2_normalize=cfg.l2_normalize)  # [B,P,D]
+            emb = extract_patch_embeddings(
+                backbone_name=cfg.backbone,
+                model=backbone,
+                hooks=hooks,
+                x=x,
+                layers=cfg.layers,
+                l2_normalize=cfg.l2_normalize,
+                return_hw=False,
+            )
+            if isinstance(emb, tuple):
+                emb = emb[0]
             nominal_patches.append(to_numpy(emb.reshape(-1, emb.shape[-1])))
 
     X = np.concatenate(nominal_patches, axis=0)
@@ -86,9 +94,17 @@ def main() -> None:
         for batch in test_dl:
             x = batch.image.to(device)  # type: ignore
             labels = batch.label.numpy().astype(np.int64)  # type: ignore
-            _ = backbone(x)
-            feats = hooks.pop()
-            emb = patch_embeddings(feats, cfg.layers, l2_normalize=cfg.l2_normalize)  # [B,P,D]
+            emb = extract_patch_embeddings(
+                backbone_name=cfg.backbone,
+                model=backbone,
+                hooks=hooks,
+                x=x,
+                layers=cfg.layers,
+                l2_normalize=cfg.l2_normalize,
+                return_hw=False,
+            )
+            if isinstance(emb, tuple):
+                emb = emb[0]
             emb = to_numpy(emb)
             for i in range(emb.shape[0]):
                 score = model.score_image(emb[i])
