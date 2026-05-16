@@ -157,17 +157,21 @@ def main() -> None:
     ap.add_argument("--max-train", type=int, default=0)
     ap.add_argument("--max-test", type=int, default=0)
 
-    ap.add_argument("--backbone", action="append", default=["vit_b_16", "wide_resnet50_2"], help="repeatable")
-    ap.add_argument("--image-size", action="append", type=int, default=[224, 256], help="repeatable")
-    ap.add_argument("--coreset-ratio", action="append", type=float, default=[0.0005, 0.001], help="repeatable")
-    ap.add_argument("--num-neighbors", action="append", type=int, default=[1], help="repeatable")
-    ap.add_argument("--image-score", action="append", default=["max"], help="repeatable")
+    ap.add_argument("--backbone", action="append", default=[], help="repeatable (if omitted, uses a small default set)")
+    ap.add_argument("--image-size", action="append", type=int, default=[], help="repeatable (if omitted, uses a small default set)")
+    ap.add_argument("--coreset-ratio", action="append", type=float, default=[], help="repeatable (if omitted, uses a small default set)")
+    ap.add_argument("--num-neighbors", action="append", type=int, default=[1, 5], help="repeatable")
+    ap.add_argument("--image-score", action="append", default=["max", "mean"], help="repeatable")
     ap.add_argument("--l2-normalize", action=argparse.BooleanOptionalAction, default=True)
 
     args = ap.parse_args()
 
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+
+    backbones = args.backbone or ["vit_b_16", "wide_resnet50_2"]
+    image_sizes = args.image_size or [224, 256]
+    coreset_ratios = args.coreset_ratio or [0.0005, 0.001]
 
     # If user specified multiple l2 settings, they'd run separately by invoking script twice.
     specs = [
@@ -180,9 +184,9 @@ def main() -> None:
             l2_normalize=bool(args.l2_normalize),
         )
         for (bb, sz, cr, k, im) in itertools.product(
-            args.backbone,
-            args.image_size,
-            args.coreset_ratio,
+            backbones,
+            image_sizes,
+            coreset_ratios,
             args.num_neighbors,
             args.image_score,
         )
