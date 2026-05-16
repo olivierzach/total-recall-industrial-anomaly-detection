@@ -38,4 +38,5 @@ Start here:
 - `docs/BASELINE_LADDER.md`
 - `docs/DEFECT_LOOKUP.md` (extending anomaly detection with known failure-mode lookup)
 - `docs/ABLATIONS_DISTANCE_METRICS.md` (euclidean vs cosine vs PCA-whitened kNN)
+- `docs/QUERY_ADAPTIVE_MEMORY.md` (query-adaptive nominal selection; patch vs image routing)
 - `docs/RELATED_WORK.md`
