@@ -12,6 +12,14 @@ python3 scripts/mvtec_get.py --archive data/raw/mvtec_ad.zip --out data/mvtec
 
 ## 2) Fit a PatchCore memory bank
 
+### On your own nominal folder (recommended)
+
+```bash
+python3 scripts/fit_nominal_patchcore.py --nominal /path/to/nominal --device cpu --out outputs/models/my_product
+```
+
+### On MVTec (benchmark)
+
 ```bash
 python3 scripts/fit_mvtec_patchcore.py --mvtec-root data/mvtec --category bottle --device cpu --out outputs/models/bottle
 ```
