@@ -14,3 +14,4 @@ outputs/
 experiments/**/outputs/
 .pytest_cache
 .venv311
+.ruff_cache
