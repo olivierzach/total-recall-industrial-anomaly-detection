@@ -1,0 +1,72 @@
+# From-scratch setup + running on your own nominal images
+
+This is the practical path for getting PatchCore running on a **new computer** and then fitting a memory bank on **your own nominal (good) images**.
+
+## 0) Prereqs
+- Python 3.11+ (3.12 recommended)
+- git
+
+Optional (Mac GPU): Apple Silicon + PyTorch MPS (see `docs/GPU_ACCEL.md`).
+
+## 1) Install
+
+```bash
+git clone <REPO_URL>
+cd total-recall-industrial-anomaly-detection
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+```
+
+## 2) Fit a model (build a nominal memory bank)
+
+PatchCore is “nominal-only”: you build a memory bank from **good** examples.
+
+Assume you have:
+- `~/data/nominal_dishes/` containing good dish images (`.jpg/.png/...`)
+
+Run:
+
+```bash
+python3 scripts/fit_nominal_patchcore.py \
+  --nominal ~/data/nominal_dishes \
+  --out outputs/models/dishes_camA \
+  --device mps \
+  --backbone vit_b_16 --image-size 224 \
+  --coreset-ratio 0.02
+```
+
+What you get:
+- `outputs/models/dishes_camA/` which includes:
+  - the PatchCore config (backbone, layers, image_size, etc.)
+  - the fitted memory bank (coreset embeddings)
+
+Notes:
+- The first run will auto-download pretrained backbone weights via torchvision.
+- If you change backbone/image_size/layers, you must rebuild the memory bank.
+
+## 3) Score new images
+
+```bash
+python3 scripts/score_images.py \
+  --model outputs/models/dishes_camA \
+  --images ~/data/new_dishes_batch \
+  --device mps \
+  --out outputs/dishes_scores.jsonl \
+  --save-maps outputs/dishes_maps
+```
+
+This writes:
+- `outputs/dishes_scores.jsonl` (one JSON per image with an anomaly score)
+- `outputs/dishes_maps/*.anomaly_patchgrid.npy` (patch-grid anomaly maps for triage)
+
+## 4) Visualize anomaly maps
+
+See `scripts/viz_anomaly_maps.py`.
+
+## Troubleshooting
+
+- If `--device mps` errors, fall back to `--device cpu`.
+- If you’re on Linux with an NVIDIA GPU, use `--device cuda`.

@@ -16,6 +16,12 @@ This repo is a practical, local re-implementation + experimentation harness for:
   - latency / memory trade-offs
   - domain shifts, new products, few-shot updates
 
+## Quickstart
+
+- New machine + your own nominal images: `docs/FROM_SCRATCH.md`
+- Fast dev iteration: `docs/DEV_CONFIG.md`
+- Mac mini GPU (MPS): `docs/GPU_ACCEL.md`
+
 ## Next steps
 
 Start here:
