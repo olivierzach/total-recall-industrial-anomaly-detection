@@ -1,0 +1,20 @@
+{
+  "default_dataset": "btad_components",
+  "router_artifact": "../outputs/hybrid_memory_demo/nominal_router_v1",
+  "datasets": [
+    {
+      "key": "mvtec_bottle",
+      "display_name": "MVTec AD / bottle",
+      "artifact_dir": "../outputs/hybrid_memory_demo/mvtec_bottle/artifact",
+      "examples_json": "../outputs/hybrid_memory_demo/mvtec_bottle/examples.json",
+      "note": "Active artifact is trained on MVTec AD bottle with named defect families."
+    },
+    {
+      "key": "btad_components",
+      "display_name": "BTAD / component-conditioned defects",
+      "artifact_dir": "../outputs/hybrid_memory_demo/btad_components_wrn50_layer3/artifact",
+      "examples_json": "../outputs/hybrid_memory_demo/btad_components_wrn50_layer3/examples.json",
+      "note": "Active artifact is trained on BTAD with the stronger local WRN50 layer3 anomaly profile. Labels remain component-conditioned failure families because BTAD exposes ok/ko labels."
+    }
+  ]
+}

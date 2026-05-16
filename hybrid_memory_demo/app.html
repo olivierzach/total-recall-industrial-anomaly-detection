@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hybrid Failure Memory Demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111b;
+        --bg-2: #0b1622;
+        --panel: rgba(10, 20, 31, 0.92);
+        --panel-2: rgba(13, 25, 39, 0.96);
+        --line: rgba(179, 197, 214, 0.16);
+        --line-strong: rgba(179, 197, 214, 0.28);
+        --text: #e9f1f8;
+        --muted: #90a6ba;
+        --accent: #65c4ff;
+        --accent-2: #8de1ba;
+        --warn: #f3c061;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.36);
+        --radius: 12px;
+        --radius-lg: 16px;
+        --mono: "JetBrains Mono", "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+        --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        font-family: var(--sans);
+        background:
+          linear-gradient(rgba(115, 145, 173, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(115, 145, 173, 0.05) 1px, transparent 1px),
+          radial-gradient(circle at top left, rgba(101, 196, 255, 0.08), transparent 28%),
+          radial-gradient(circle at bottom right, rgba(141, 225, 186, 0.08), transparent 30%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+        background-size: 24px 24px, 24px 24px, auto, auto, auto;
+      }
+
+      .shell {
+        width: min(1440px, calc(100vw - 32px));
+        margin: 20px auto 28px;
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: 1.3fr 0.9fr;
+        gap: 16px;
+      }
+
+      .panel {
+        background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 20px 22px;
+      }
+
+      .eyebrow {
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 10px 0 10px;
+        font-size: clamp(2rem, 4.4vw, 3.3rem);
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+        font-weight: 650;
+      }
+
+      .abstract {
+        max-width: 780px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .summary {
+        padding: 20px 22px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .summary-card,
+      .metric,
+      .glossary-item {
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.025);
+      }
+
+      .summary-card strong,
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-size: 1.15rem;
+        font-weight: 640;
+      }
+
+      .summary-card span,
+      .muted {
+        color: var(--muted);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 16px;
+        margin-top: 16px;
+      }
+
+      .sidebar,
+      .main {
+        padding: 18px;
+      }
+
+      .section-title {
+        margin: 0 0 12px;
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .control-stack,
+      .section-stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      input[type="file"],
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font: inherit;
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .btn {
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        padding: 11px 14px;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.035);
+        color: var(--text);
+        font: inherit;
+        transition: background 120ms ease, border-color 120ms ease;
+      }
+
+      .btn:hover,
+      .example-btn:hover,
+      .bank-card:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: var(--accent);
+      }
+
+      .example-list,
+      .support-list {
+        display: grid;
+        gap: 10px;
+        overflow: auto;
+      }
+
+      .example-list {
+        max-height: 460px;
+      }
+
+      .support-list {
+        max-height: 300px;
+      }
+
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: var(--mono);
+        font-size: 0.76rem;
+      }
+
+      .comparison-table th,
+      .comparison-table td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+      }
+
+      .comparison-table th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .example-btn {
+        width: 100%;
+        text-align: left;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.025);
+        color: var(--text);
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        gap: 12px;
+      }
+
+      .example-btn img,
+      .support-card img {
+        width: 100%;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #0f1720;
+      }
+
+      .example-copy strong,
+      .support-card strong {
+        display: block;
+        font-size: 0.95rem;
+        font-weight: 620;
+      }
+
+      .example-copy small,
+      .support-card small {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      .support-card {
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        gap: 12px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.025);
+        cursor: pointer;
+      }
+
+      .tag {
+        display: inline-block;
+        margin-bottom: 6px;
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: var(--mono);
+        font-size: 0.72rem;
+        color: var(--accent);
+      }
+
+      .result-header {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .status-strip {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.03);
+        font-family: var(--mono);
+        font-size: 0.76rem;
+      }
+
+      .status-normal {
+        color: var(--accent-2);
+      }
+
+      .status-known_failure {
+        color: var(--accent);
+      }
+
+      .status-unknown_anomaly {
+        color: var(--warn);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .metric strong {
+        font-family: var(--mono);
+        font-size: 1.22rem;
+      }
+
+      .figure-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .figure-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .figure-card header {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .figure-card img {
+        display: block;
+        width: 100%;
+        background: #0e1720;
+      }
+
+      .grid-two {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .bank-panel {
+        margin-top: 16px;
+        padding: 18px;
+      }
+
+      .bank-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 180px 120px;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+      }
+
+      .bank-count {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 0.76rem;
+      }
+
+      .bank-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+        gap: 10px;
+        max-height: 620px;
+        overflow: auto;
+        margin-top: 12px;
+      }
+
+      .bank-card {
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.025);
+        cursor: pointer;
+        text-align: left;
+        color: var(--text);
+      }
+
+      .bank-card img {
+        width: 100%;
+        aspect-ratio: 1;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        display: block;
+        background: #0e1720;
+      }
+
+      .bank-card strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.82rem;
+      }
+
+      .bank-card small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+
+      .neighbors,
+      .glossary {
+        display: grid;
+        gap: 10px;
+      }
+
+      .neighbor-card {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 12px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.025);
+        cursor: pointer;
+      }
+
+      .neighbor-card img {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+      }
+
+      .mono {
+        font-family: var(--mono);
+      }
+
+      .glossary-item strong {
+        display: block;
+        margin-bottom: 6px;
+        font-family: var(--mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .glossary-item p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .error-text {
+        color: #ff8b7f;
+      }
+
+      @media (max-width: 1080px) {
+        .topbar,
+        .layout,
+        .grid-two,
+        .summary-grid,
+        .metrics,
+        .figure-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="topbar">
+        <div class="panel hero">
+          <div class="eyebrow">Hybrid Memory Retrieval</div>
+          <h1>Open-Set Failure Detection With Labeled Memory</h1>
+          <p class="abstract">
+            This interface combines a nominal anomaly detector with a labeled failure memory bank. The system first
+            estimates whether an image is off-nominal, then decides whether the anomaly is close to a previously stored
+            failure mode or should remain categorized as a novel anomaly.
+          </p>
+        </div>
+        <div class="panel summary">
+          <div class="section-title">System Summary</div>
+          <div class="summary-grid">
+            <div class="summary-card">
+              <span>Active dataset</span>
+              <strong id="summary-dataset">Loading...</strong>
+            </div>
+            <div class="summary-card">
+              <span>Model profile</span>
+              <strong id="summary-model" class="mono">Loading...</strong>
+            </div>
+            <div class="summary-card">
+              <span>Evaluation protocol</span>
+              <strong id="summary-protocol">Loading...</strong>
+            </div>
+            <div class="summary-card">
+              <span>Dataset eval</span>
+              <strong id="summary-metrics" class="mono">Loading...</strong>
+            </div>
+          </div>
+          <div class="muted" id="thresholds">Loading thresholds...</div>
+          <div class="muted" id="dataset-note">Loading artifact note...</div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="panel sidebar">
+          <div class="section-stack">
+            <div>
+              <div class="section-title">Inference Control</div>
+              <div class="control-stack">
+                <select id="dataset-select"></select>
+                <select id="mode-select">
+                  <option value="selected">Use Selected Dataset</option>
+                  <option value="auto">Use Learned Nominal Router</option>
+                </select>
+                <input id="file-input" type="file" accept="image/*" />
+                <div class="button-row">
+                  <button id="upload-btn" class="btn">Run Upload</button>
+                  <button id="refresh-btn" class="btn">Reload Gallery</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="section-title">Evaluation Gallery</div>
+              <div id="examples" class="example-list"></div>
+            </div>
+
+            <div>
+              <div class="section-title">Known Failure Library</div>
+              <div id="support-library" class="support-list"></div>
+            </div>
+          </div>
+        </aside>
+
+        <main class="panel main">
+          <div class="result-header">
+            <div id="result-meta" class="muted">Select an example or upload an image.</div>
+            <div class="metrics" id="metrics"></div>
+          </div>
+
+          <div class="figure-grid" id="result-grid"></div>
+
+          <div class="grid-two">
+            <section>
+              <div class="section-title">Nominal Profile Comparison</div>
+              <div id="comparison"></div>
+            </section>
+            <section>
+              <div class="section-title">Nearest Failure Memory</div>
+              <div id="neighbors" class="neighbors"></div>
+            </section>
+          </div>
+
+          <section style="margin-top: 16px;">
+            <div class="section-title">Metric Glossary</div>
+            <div class="glossary">
+              <div class="glossary-item">
+                <strong>Retrieved Label</strong>
+                <p>
+                  The retrieved known failure class or support family. It is only trusted when the image is anomalous
+                  and the failure descriptor is sufficiently close to one stored class.
+                </p>
+              </div>
+              <div class="glossary-item">
+                <strong>Anomaly Score</strong>
+                <p>
+                  The PatchCore image-level distance from the nominal memory bank. Larger values mean the image looks
+                  less like normal training data.
+                </p>
+              </div>
+              <div class="glossary-item">
+                <strong>Threshold</strong>
+                <p>
+                  The anomaly cutoff calibrated on held-out nominal images. Scores below it are treated as normal;
+                  scores above it move to known-vs-unknown failure retrieval.
+                </p>
+              </div>
+              <div class="glossary-item">
+                <strong>Margin</strong>
+                <p>
+                  The ratio between the second-best and best known-failure distances. Higher margin means the top
+                  retrieved failure class is more clearly separated from alternatives.
+                </p>
+              </div>
+              <div class="glossary-item">
+                <strong>Embedding Heatmap</strong>
+                <p>
+                  A per-patch embedding-space response relative to the nearest retrieved failure memory. It is a
+                  feature-response view, not a calibrated anomaly probability map.
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
+      </section>
+
+      <section class="panel bank-panel">
+        <div class="section-title">Random Image Bank</div>
+        <div class="muted" id="bank-note">Loading a random bank of local industrial images...</div>
+        <div class="bank-toolbar">
+          <input id="bank-search" type="search" placeholder="Search source, label, or filename" />
+          <select id="bank-filter">
+            <option value="all">All labels</option>
+            <option value="ok">Normal only</option>
+            <option value="ko">Anomalous only</option>
+          </select>
+          <div id="bank-count" class="bank-count">0 shown</div>
+        </div>
+        <div id="image-bank" class="bank-grid"></div>
+      </section>
+    </div>
+
+    <script>
+      const examplesEl = document.getElementById("examples");
+      const metricsEl = document.getElementById("metrics");
+      const resultGridEl = document.getElementById("result-grid");
+      const neighborsEl = document.getElementById("neighbors");
+      const comparisonEl = document.getElementById("comparison");
+      const resultMetaEl = document.getElementById("result-meta");
+      const thresholdsEl = document.getElementById("thresholds");
+      const supportLibraryEl = document.getElementById("support-library");
+      const imageBankEl = document.getElementById("image-bank");
+      const bankNoteEl = document.getElementById("bank-note");
+      const bankSearchEl = document.getElementById("bank-search");
+      const bankFilterEl = document.getElementById("bank-filter");
+      const bankCountEl = document.getElementById("bank-count");
+      const datasetSelectEl = document.getElementById("dataset-select");
+      const modeSelectEl = document.getElementById("mode-select");
+      const summaryDatasetEl = document.getElementById("summary-dataset");
+      const summaryModelEl = document.getElementById("summary-model");
+      const summaryProtocolEl = document.getElementById("summary-protocol");
+      const summaryMetricsEl = document.getElementById("summary-metrics");
+      const datasetNoteEl = document.getElementById("dataset-note");
+
+      let catalog = {};
+      let currentDataset = null;
+      let fullBank = [];
+
+      function currentDatasetKey() {
+        return currentDataset || datasetSelectEl.value;
+      }
+
+      function currentMode() {
+        return modeSelectEl.value;
+      }
+
+      function renderDatasetSummary(row) {
+        if (!row) {
+          return;
+        }
+        summaryDatasetEl.textContent = row.display_name;
+        summaryModelEl.textContent = row.profile_summary || "n/a";
+        summaryProtocolEl.textContent = row.protocol_summary || "Hybrid open-set retrieval";
+        const evalRow = row.evaluation_snapshot || {};
+        if (evalRow.status_accuracy !== undefined) {
+          summaryMetricsEl.textContent =
+            `status ${evalRow.status_accuracy.toFixed(3)} | known ${evalRow.known_failure_recall.toFixed(3)} | unknown ${evalRow.unknown_anomaly_recall.toFixed(3)}`;
+        } else {
+          summaryMetricsEl.textContent = "Eval metrics unavailable";
+        }
+        datasetNoteEl.textContent = row.note || "Artifact note unavailable.";
+      }
+
+      function metricCard(label, value) {
+        return `
+          <div class="metric">
+            <span class="muted">${label}</span>
+            <strong>${value}</strong>
+          </div>
+        `;
+      }
+
+      async function fetchJson(url, options) {
+        const response = await fetch(url, options);
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+        if (!response.ok) {
+          const message = payload && payload.error ? payload.error : `request failed (${response.status})`;
+          throw new Error(message);
+        }
+        return payload;
+      }
+
+      function setMessage(text, isError = false) {
+        resultMetaEl.innerHTML = `<span class="${isError ? "error-text" : "muted"}">${text}</span>`;
+      }
+
+      async function loadCatalog() {
+        const payload = await fetchJson("/api/catalog");
+        catalog = Object.fromEntries(payload.datasets.map((row) => [row.key, row]));
+        datasetSelectEl.innerHTML = "";
+        payload.datasets.forEach((row) => {
+          const option = document.createElement("option");
+          option.value = row.key;
+          option.textContent = row.display_name;
+          datasetSelectEl.appendChild(option);
+        });
+        currentDataset = payload.default_dataset;
+        datasetSelectEl.value = currentDataset;
+        renderDatasetSummary(catalog[currentDataset]);
+      }
+
+      async function loadExamples() {
+        const dataset = currentDatasetKey();
+        const payload = await fetchJson(`/api/examples?dataset=${encodeURIComponent(dataset)}`);
+        currentDataset = payload.dataset;
+        datasetSelectEl.value = currentDataset;
+        renderDatasetSummary(catalog[currentDataset]);
+        const evalRow = payload.dataset_evaluation || {};
+        thresholdsEl.textContent =
+          `anomaly threshold ${payload.thresholds.anomaly_threshold.toFixed(4)} | ` +
+          `known-failure threshold ${payload.thresholds.known_failure_threshold.toFixed(4)} | ` +
+          `margin cutoff ${payload.thresholds.margin_threshold.toFixed(3)}` +
+          (evalRow.n_eval !== undefined
+            ? ` | eval n ${evalRow.n_eval} | novel-as-known ${evalRow.novel_as_known_rate.toFixed(3)}`
+            : "");
+        datasetNoteEl.textContent = payload.note || catalog[currentDataset]?.note || "Artifact note unavailable.";
+
+        examplesEl.innerHTML = "";
+        payload.examples.forEach((example) => {
+          const btn = document.createElement("button");
+          btn.className = "example-btn";
+          btn.innerHTML = `
+            <img src="${example.image_url}" alt="${example.id}" />
+            <span class="example-copy">
+              <strong>${example.id}</strong>
+              <small>${example.ground_truth_status}${example.ground_truth_label ? " · " + example.ground_truth_label : ""}</small>
+              <small class="mono">predicted ${example.predicted_status}${example.predicted_label ? " / " + example.predicted_label : ""}</small>
+            </span>
+          `;
+          btn.onclick = () => runExample(example.id);
+          examplesEl.appendChild(btn);
+        });
+
+        supportLibraryEl.innerHTML = "";
+        payload.support_library.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.className = "support-card";
+          btn.innerHTML = `
+            <img src="${item.image_url}" alt="${item.label}" />
+            <div>
+              <span class="tag">${item.label}</span>
+              <strong>${item.path.split("/").slice(-2).join("/")}</strong>
+              <small class="mono">support score ${item.anomaly_score.toFixed(4)}</small>
+            </div>
+          `;
+          btn.onclick = () => runSupport(item.support_index);
+          supportLibraryEl.appendChild(btn);
+        });
+      }
+
+      async function loadBank() {
+        const dataset = currentDatasetKey();
+        const payload = await fetchJson(`/api/bank?dataset=${encodeURIComponent(dataset)}`);
+        bankNoteEl.textContent = `${payload.note} Showing ${payload.count} random images.`;
+        fullBank = payload.bank;
+        renderBank();
+      }
+
+      function renderBank() {
+        const needle = bankSearchEl.value.trim().toLowerCase();
+        const bankFilter = bankFilterEl.value;
+        const filtered = fullBank.filter((item) => {
+          const text = `${item.source} ${item.label} ${item.path.split("/").pop()}`.toLowerCase();
+          const matchesText = needle === "" || text.includes(needle);
+          const matchesFilter =
+            bankFilter === "all" ||
+            (bankFilter === "ok" && item.label === "ok") ||
+            (bankFilter === "ko" && item.label !== "ok");
+          return matchesText && matchesFilter;
+        });
+        imageBankEl.innerHTML = "";
+        bankCountEl.textContent = `${filtered.length} shown`;
+        filtered.forEach((item) => {
+          const card = document.createElement("button");
+          card.className = "bank-card";
+          card.innerHTML = `
+            <img loading="lazy" src="/api/bank_image?dataset=${encodeURIComponent(currentDatasetKey())}&id=${encodeURIComponent(item.id)}" alt="${item.id}" />
+            <strong>${item.source}</strong>
+            <small>${item.label} · ${item.path.split("/").pop()}</small>
+          `;
+          card.onclick = () => runBank(item.id);
+          imageBankEl.appendChild(card);
+        });
+      }
+
+      function renderPrediction(payload) {
+        const prediction = payload.prediction;
+        const labelDisplayName = payload.label_display_name || "Predicted Label";
+        const routerText = payload.routing_decision
+          ? `learned router:&nbsp;${payload.routing_decision.predicted_display_name}`
+          : `learned router:&nbsp;manual`;
+        const selectionText = payload.routing_decision && payload.routing_decision.selected_by_nominal_fit
+          ? `selected fit:&nbsp;${payload.routing_decision.selected_by_nominal_fit.display_name}`
+          : `selected fit:&nbsp;${payload.display_name}`;
+        const embeddingText = payload.embedding_reference
+          ? `embedding ref:&nbsp;${payload.embedding_reference.label}`
+          : "embedding ref:&nbsp;none";
+        resultMetaEl.innerHTML = `
+          <div style="display:grid; gap:10px;">
+            <div class="status-strip">
+              <span class="pill">requested:&nbsp;${catalog[payload.requested_dataset]?.display_name || payload.requested_dataset}</span>
+              <span class="pill">active:&nbsp;${payload.display_name}</span>
+              <span class="pill">mode:&nbsp;${payload.mode}</span>
+              <span class="pill">${routerText}</span>
+              <span class="pill">${selectionText}</span>
+              <span class="pill">status: <strong class="status-${prediction.status}">&nbsp;${prediction.status}</strong></span>
+              <span class="pill">${embeddingText}</span>
+              ${payload.example ? `<span class="pill">truth:&nbsp;${payload.example.ground_truth_status}${payload.example.ground_truth_label ? " / " + payload.example.ground_truth_label : ""}</span>` : ""}
+            </div>
+            <div class="muted">${payload.protocol_summary || ""}${payload.primary_interpretation ? " | " + payload.primary_interpretation : ""}</div>
+          </div>
+        `;
+
+        metricsEl.innerHTML = [
+          metricCard(labelDisplayName, prediction.predicted_label || "none"),
+          metricCard("Anomaly Score", prediction.anomaly_score.toFixed(4)),
+          metricCard("Threshold", prediction.anomaly_threshold.toFixed(4)),
+          metricCard("Margin", prediction.failure_margin_ratio === null ? "n/a" : prediction.failure_margin_ratio.toFixed(3)),
+        ].join("");
+
+        comparisonEl.innerHTML = `
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Profile</th>
+                <th>Status</th>
+                <th>Anomaly</th>
+                <th>Threshold</th>
+                <th>Ratio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${payload.profile_comparison.map((row) => `
+                <tr>
+                  <td>${row.display_name}</td>
+                  <td>${row.status}${row.predicted_label ? " / " + row.predicted_label : ""}</td>
+                  <td>${row.anomaly_score.toFixed(4)}</td>
+                  <td>${row.anomaly_threshold.toFixed(4)}</td>
+                  <td>${row.anomaly_ratio.toFixed(3)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+
+        resultGridEl.innerHTML = `
+          <article class="figure-card">
+            <header>Input Image</header>
+            <img src="${payload.input_image_url}" alt="input image" />
+          </article>
+          <article class="figure-card">
+            <header>Anomaly Heatmap Overlay</header>
+            <img src="${payload.overlay_image_url}" alt="overlay image" />
+          </article>
+          <article class="figure-card">
+            <header>Embedding-Space Heatmap</header>
+            <img src="${payload.embedding_image_url}" alt="embedding heatmap" />
+          </article>
+          <article class="figure-card">
+            <header>Patch Embedding PCA</header>
+            <img src="${payload.embedding_space_image_url}" alt="embedding space" />
+          </article>
+        `;
+
+        neighborsEl.innerHTML = "";
+        payload.nearest_failures.forEach((neighbor) => {
+          const btn = document.createElement("button");
+          btn.className = "neighbor-card";
+          btn.innerHTML = `
+            <img src="${neighbor.image_url}" alt="${neighbor.label}" />
+            <div>
+              <span class="tag">${neighbor.label}</span>
+              <strong>${neighbor.path.split("/").slice(-2).join("/")}</strong>
+              <small class="mono">distance ${neighbor.distance.toFixed(4)}</small>
+              <small class="mono">support score ${neighbor.support_anomaly_score.toFixed(4)}</small>
+            </div>
+          `;
+          btn.onclick = () => runSupport(neighbor.support_index);
+          neighborsEl.appendChild(btn);
+        });
+      }
+
+      async function runExample(id) {
+        setMessage(`Running example ${id}...`);
+        try {
+          const payload = await fetchJson(`/api/predict_example?dataset=${encodeURIComponent(currentDatasetKey())}&mode=${encodeURIComponent(currentMode())}&id=${encodeURIComponent(id)}`);
+          renderPrediction(payload);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      }
+
+      async function runSupport(index) {
+        setMessage(`Running support image ${index}...`);
+        try {
+          const payload = await fetchJson(`/api/predict_support?dataset=${encodeURIComponent(currentDatasetKey())}&mode=${encodeURIComponent(currentMode())}&index=${encodeURIComponent(index)}`);
+          renderPrediction(payload);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      }
+
+      async function runBank(id) {
+        setMessage(`Running bank image ${id}...`);
+        try {
+          const payload = await fetchJson(`/api/predict_bank?dataset=${encodeURIComponent(currentDatasetKey())}&mode=${encodeURIComponent(currentMode())}&id=${encodeURIComponent(id)}`);
+          renderPrediction(payload);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      }
+
+      async function uploadImage() {
+        const input = document.getElementById("file-input");
+        if (!input.files || !input.files[0]) {
+          return;
+        }
+        const file = input.files[0];
+        setMessage(`Running upload ${file.name}...`);
+        try {
+          const payload = await fetchJson(`/api/predict?dataset=${encodeURIComponent(currentDatasetKey())}&mode=${encodeURIComponent(currentMode())}`, {
+            method: "POST",
+            body: await file.arrayBuffer(),
+          });
+          renderPrediction(payload);
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      }
+
+      datasetSelectEl.onchange = async () => {
+        currentDataset = datasetSelectEl.value;
+        renderDatasetSummary(catalog[currentDataset]);
+        await loadExamples();
+        await loadBank();
+      };
+      modeSelectEl.onchange = () => {
+        setMessage(`Inference mode set to ${currentMode()}.`);
+      };
+      bankSearchEl.oninput = renderBank;
+      bankFilterEl.onchange = renderBank;
+      document.getElementById("upload-btn").onclick = uploadImage;
+      document.getElementById("refresh-btn").onclick = async () => {
+        await loadExamples();
+        await loadBank();
+      };
+      (async () => {
+        await loadCatalog();
+        await loadExamples();
+        await loadBank();
+      })();
+    </script>
+  </body>
+</html>

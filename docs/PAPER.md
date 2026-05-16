@@ -15,3 +15,9 @@
 - anomaly map upsampling/smoothing
 - evaluation: AUROC (image/pixel), PRO
 
+## Related notes
+
+- Hybrid known-failure extension / "negative memory bank" research note:
+  `docs/NEGATIVE_MEMORY_BANK_RESEARCH.md`
+- Coreset, memory-bank size, and delayed-label tradeoffs:
+  `docs/CORESET_AND_LABEL_REGIMES.md`
