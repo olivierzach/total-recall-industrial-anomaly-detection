@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -109,11 +110,23 @@ def main() -> None:
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
+    timing = {
+        "feature_train_s": 0.0,
+        "feature_test_s": 0.0,
+        "coreset_s": 0.0,
+        "knn_fit_s": 0.0,
+        "metric_s": 0.0,
+        "total_s": 0.0,
+    }
+
+    t_total0 = time.time()
+
     nominal_patches = []
     n_train_seen = 0
     with torch.no_grad():
         for bi, batch in enumerate(train_dl):
             x = batch.image.to(device)  # type: ignore
+            t0 = time.time()
             emb = extract_patch_embeddings(
                 backbone_name=cfg.backbone,
                 model=backbone,
@@ -123,6 +136,19 @@ def main() -> None:
                 l2_normalize=cfg.l2_normalize,
                 return_hw=False,
             )
+            # Best-effort device sync for accurate timing.
+            if device.type == "mps":
+                try:
+                    torch.mps.synchronize()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            elif device.type == "cuda":
+                try:
+                    torch.cuda.synchronize()
+                except Exception:
+                    pass
+            timing["feature_train_s"] += time.time() - t0
+
             if isinstance(emb, tuple):
                 emb = emb[0]
             nominal_patches.append(to_numpy(emb.reshape(-1, emb.shape[-1])))
@@ -134,10 +160,14 @@ def main() -> None:
 
     X = np.concatenate(nominal_patches, axis=0)
 
+    t0 = time.time()
     idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio)
+    timing["coreset_s"] = time.time() - t0
     Xc = X[idx]
 
+    t0 = time.time()
     model = PatchCoreModel.fit(cfg, Xc)
+    timing["knn_fit_s"] = time.time() - t0
 
     y_true = []
     y_score = []
@@ -152,6 +182,7 @@ def main() -> None:
             labels = batch.label.numpy().astype(np.int64)  # type: ignore
             masks = batch.mask  # type: ignore
 
+            t0 = time.time()
             emb, (H, W) = extract_patch_embeddings(
                 backbone_name=cfg.backbone,
                 model=backbone,
@@ -161,6 +192,18 @@ def main() -> None:
                 l2_normalize=cfg.l2_normalize,
                 return_hw=True,
             )
+            if device.type == "mps":
+                try:
+                    torch.mps.synchronize()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            elif device.type == "cuda":
+                try:
+                    torch.cuda.synchronize()
+                except Exception:
+                    pass
+            timing["feature_test_s"] += time.time() - t0
+
             emb_np = to_numpy(emb)
 
             for i in range(emb_np.shape[0]):
@@ -193,6 +236,7 @@ def main() -> None:
 
     pixel_auc = float("nan")
     pro_auc = float("nan")
+    t0 = time.time()
     if px_true:
         px_true_arr = np.stack(px_true)
         px_score_arr = np.stack(px_score)
@@ -202,6 +246,9 @@ def main() -> None:
         scores_2d = [px_score_arr[i] for i in range(px_score_arr.shape[0])]
         masks_2d = [px_true_arr[i] for i in range(px_true_arr.shape[0])]
         pro_auc = compute_pro_auc(scores_2d, masks_2d, fpr_limit=0.3, n_thresholds=200).pro_auc
+    timing["metric_s"] = time.time() - t0
+
+    timing["total_s"] = time.time() - t_total0
 
     out = {
         "cfg": asdict(cfg),
@@ -209,6 +256,7 @@ def main() -> None:
         "n_test": len(test_ds),
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
         "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc, "pro_auc": pro_auc},
+        "timing": timing,
     }
 
     out_path = Path(args.out)
