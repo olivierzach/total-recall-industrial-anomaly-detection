@@ -37,4 +37,5 @@ Start here:
 - `docs/EVAL_PROTOCOL.md`
 - `docs/BASELINE_LADDER.md`
 - `docs/DEFECT_LOOKUP.md` (extending anomaly detection with known failure-mode lookup)
+- `docs/ABLATIONS_DISTANCE_METRICS.md` (euclidean vs cosine vs PCA-whitened kNN)
 - `docs/RELATED_WORK.md`

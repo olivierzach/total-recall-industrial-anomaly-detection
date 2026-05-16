@@ -19,6 +19,7 @@ import argparse
 import json
 import math
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -41,8 +42,20 @@ from src.data.mvtec import MVTecADDataset
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.patchcore.preprocess import pca_from_state
 from src.utils.image_viz import bbox_from_binary_mask, bbox_from_score_map, draw_bboxes, overlay_heatmap, upsample_score_map
 from src.utils.io import load_patchcore, load_threshold_artifact
+from src.utils.provenance import (
+    REVIEW_MANIFEST_SCHEMA_VERSION,
+    RUN_MANIFEST_SCHEMA_VERSION,
+    add_outputs,
+    artifact_reference,
+    build_run_manifest,
+    dataset_reference,
+    manifest_path_for_target,
+    state_dict_sha256,
+    write_run_manifest,
+)
 
 
 def _build_dataset(args, cfg):
@@ -155,6 +168,9 @@ def main() -> None:
 
     device = torch.device(args.device)
     dataset = _build_dataset(args, cfg)
+    dataset_items = dataset._items  # type: ignore[attr-defined]
+    dataset_files = [Path(p) for (p, _, aux) in dataset_items]
+    dataset_files.extend(Path(aux) for (_, _, aux) in dataset_items if aux is not None)
     dataloader = DataLoader(
         dataset,
         batch_size=int(args.batch),
@@ -167,8 +183,10 @@ def main() -> None:
     if artifact.backbone_state is not None:
         backbone.load_state_dict(artifact.backbone_state)
     backbone = backbone.to(device)
+    backbone_hash = state_dict_sha256(backbone.state_dict())
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
-    model = PatchCoreModel.fit(cfg, artifact.memory_bank)
+    pca = pca_from_state(artifact.pca_state) if artifact.pca_state is not None else None
+    model = PatchCoreModel.fit(cfg, artifact.memory_bank, pca=pca)
 
     records: list[dict[str, Any]] = []
     dataset_index = 0
@@ -206,6 +224,33 @@ def main() -> None:
     selected = _select_records(records, args.select, int(args.top_n))
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_path_for_target(outdir)
+    input_artifacts = [artifact_reference(args.model, role="model", kind="patchcore_model")]
+    threshold_ref = None
+    if args.threshold:
+        threshold_ref = artifact_reference(args.threshold, role="threshold", kind="threshold_artifact")
+        input_artifacts.append(threshold_ref)
+    run_manifest = build_run_manifest(
+        kind="review_dataset_examples",
+        entrypoint="scripts/review_dataset_examples.py",
+        requested_device=str(args.device),
+        seed=artifact.seed,
+        config=asdict(cfg),
+        args=dict(vars(args)),
+        datasets=[
+            dataset_reference(
+                dataset=str(args.dataset),
+                role="review_source",
+                root=args.root,
+                files=dataset_files,
+                split="test",
+                category=args.category,
+                selection={"n_images": len(dataset), "selected": len(selected), "select_mode": str(args.select)},
+            )
+        ],
+        inputs=input_artifacts,
+        extra={"selected_count": len(selected), "backbone_sha256": backbone_hash},
+    )
 
     manifest: list[dict[str, Any]] = []
     for rank, rec in enumerate(selected, start=1):
@@ -253,9 +298,31 @@ def main() -> None:
         rec_out["rendered"] = str(out_path)
         rec_out["predicted_bbox"] = pred_bbox
         rec_out["gt_bbox"] = gt_bbox
+        rec_out["review_run_id"] = run_manifest["run_id"]
+        rec_out["review_manifest_path"] = str(manifest_path.resolve())
+        rec_out["schema_version"] = REVIEW_MANIFEST_SCHEMA_VERSION
+        rec_out["model_run_id"] = artifact.artifact_info.get("run_id") if artifact.artifact_info else None
+        rec_out["model_manifest_path"] = artifact.artifact_info.get("manifest_path") if artifact.artifact_info else None
+        if threshold is not None and threshold_ref is not None:
+            rec_out["threshold_run_id"] = threshold.run_id
+            rec_out["threshold_manifest_path"] = threshold_ref.get("manifest_path")
         manifest.append(rec_out)
 
     (outdir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    add_outputs(
+        run_manifest,
+        [
+            artifact_reference(
+                outdir,
+                role="review_bundle",
+                kind="qualitative_review",
+                known_run_id=run_manifest["run_id"],
+                known_schema_version=RUN_MANIFEST_SCHEMA_VERSION,
+                known_manifest_path=str(manifest_path.resolve()),
+            )
+        ],
+    )
+    write_run_manifest(outdir, run_manifest)
     print(f"Wrote {len(manifest)} examples to {outdir}")
 
 

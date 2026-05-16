@@ -24,7 +24,18 @@ from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc, classification_metrics
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.patchcore.preprocess import fit_pca
 from src.utils.io import load_threshold_artifact
+from src.utils.provenance import (
+    RUN_RESULT_SCHEMA_VERSION,
+    add_outputs,
+    artifact_reference,
+    build_run_manifest,
+    dataset_reference,
+    manifest_path_for_target,
+    state_dict_sha256,
+    write_run_manifest,
+)
 from src.utils.random import make_numpy_rng, set_global_seed
 
 
@@ -40,6 +51,9 @@ def main() -> None:
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="CNN feature layers; ignored for ViT")
     ap.add_argument("--image-size", type=int, default=256)
     ap.add_argument("--out", type=str, default="outputs/mvtec_patchcore_result.json")
+    ap.add_argument("--distance-metric", type=str, default="euclidean", choices=["euclidean", "cosine"])
+    ap.add_argument("--pca-dim", type=int, default=0)
+    ap.add_argument("--no-pca-whiten", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threshold", type=str, default=None, help="Optional threshold artifact JSON for operational metrics")
     ap.add_argument("--max-train", type=int, default=0, help="If set, cap number of nominal train images for a smoke run")
@@ -53,6 +67,9 @@ def main() -> None:
         layers=tuple(args.layers),
         image_size=int(args.image_size),
         coreset_ratio=float(args.coreset_ratio),
+        distance_metric=str(getattr(args, "distance_metric", "euclidean")),
+        pca_dim=int(getattr(args, "pca_dim", 0)),
+        pca_whiten=not bool(getattr(args, "no_pca_whiten", False)),
     )
 
     device = torch.device(args.device)
@@ -72,6 +89,7 @@ def main() -> None:
     test_dl = DataLoader(test_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
+    backbone_hash = state_dict_sha256(backbone.state_dict())
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
     t_total0 = time.time()
 
@@ -102,12 +120,19 @@ def main() -> None:
 
     X = np.concatenate(nominal_patches, axis=0)
 
+    # Optional PCA whitening (fit on nominal patches).
+    pca = None
+    X_for_nn = X
+    if cfg.pca_dim and int(cfg.pca_dim) > 0:
+        pca = fit_pca(X, int(cfg.pca_dim), whiten=bool(cfg.pca_whiten))
+        X_for_nn = pca.transform(X)
+
     # Coreset selection.
     selector = KCenterGreedy()
-    idx = selector.select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
-    Xc = X[idx]
+    idx = selector.select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+    Xc = X_for_nn[idx]
 
-    model = PatchCoreModel.fit(cfg, Xc)
+    model = PatchCoreModel.fit(cfg, Xc, pca=pca)
 
     # Evaluate image-level AUROC.
     y_true = []
@@ -145,15 +170,66 @@ def main() -> None:
     y_score = np.asarray(y_score)
     image_auroc = auroc(y_true, y_score)
     threshold_eval = None
+    input_artifacts = []
     if args.threshold:
         thr = load_threshold_artifact(args.threshold)
         threshold_eval = classification_metrics(y_true, y_score, thr.threshold)
         threshold_eval["source"] = str(Path(args.threshold).resolve())
+        if thr.source_run_id is not None:
+            threshold_eval["source_run_id"] = thr.source_run_id
+        input_artifacts.append(artifact_reference(args.threshold, role="threshold", kind="threshold_artifact"))
+
+    train_items = train_ds._items[:n_train_seen]  # type: ignore[attr-defined]
+    test_items = test_ds._items[:n_test_seen]  # type: ignore[attr-defined]
+    train_files = [Path(p) for (p, _, _) in train_items]
+    test_files = [Path(p) for (p, _, mask_path) in test_items]
+    test_files.extend(Path(mask_path) for (_, _, mask_path) in test_items if mask_path is not None)
+    manifest_path = manifest_path_for_target(args.out)
+    manifest = build_run_manifest(
+        kind="eval_mvtec_patchcore",
+        entrypoint="scripts/eval_mvtec_patchcore.py",
+        requested_device=str(args.device),
+        seed=int(args.seed),
+        config=asdict(cfg),
+        args=dict(vars(args)),
+        datasets=[
+            dataset_reference(
+                dataset="mvtec",
+                role="train",
+                root=args.mvtec_root,
+                files=train_files,
+                split="train",
+                category=args.category,
+                selection={"n_images": n_train_seen, "max_train": int(args.max_train)},
+            ),
+            dataset_reference(
+                dataset="mvtec",
+                role="test",
+                root=args.mvtec_root,
+                files=test_files,
+                split="test",
+                category=args.category,
+                selection={"n_images": n_test_seen, "max_test": int(args.max_test)},
+            ),
+        ],
+        inputs=input_artifacts,
+        extra={
+            "nominal_patches": int(X.shape[0]),
+            "coreset": int(Xc.shape[0]),
+            "metrics": {"image_auroc": image_auroc},
+            "backbone_sha256": backbone_hash,
+        },
+    )
 
     out = {
+        "schema_version": RUN_RESULT_SCHEMA_VERSION,
+        "run_id": manifest["run_id"],
+        "manifest_path": str(manifest_path.resolve()),
         "dataset": "mvtec",
+        "kind": "eval",
         "cfg": asdict(cfg),
         "category": args.category,
+        "device": str(args.device),
         "n_train": n_train_seen if args.max_train else len(train_ds),
         "n_test": n_test_seen if args.max_test else len(test_ds),
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
@@ -167,6 +243,20 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(out, indent=2, sort_keys=True))
+    add_outputs(
+        manifest,
+        [
+            artifact_reference(
+                out_path,
+                role="evaluation",
+                kind="eval_result",
+                known_run_id=manifest["run_id"],
+                known_schema_version=RUN_RESULT_SCHEMA_VERSION,
+                known_manifest_path=str(manifest_path.resolve()),
+            )
+        ],
+    )
+    write_run_manifest(out_path, manifest)
     print(json.dumps(out, indent=2, sort_keys=True))
 
 

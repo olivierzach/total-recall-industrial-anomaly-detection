@@ -7,6 +7,7 @@ import torch
 from sklearn.neighbors import NearestNeighbors
 
 from .config import PatchCoreConfig
+from .preprocess import PCATransform
 
 
 @dataclass
@@ -14,13 +15,31 @@ class PatchCoreModel:
     cfg: PatchCoreConfig
     memory: np.ndarray  # [N,D]
     nn: NearestNeighbors
+    pca: PCATransform | None = None
 
     @classmethod
-    def fit(cls, cfg: PatchCoreConfig, nominal_patch_embeddings: np.ndarray) -> "PatchCoreModel":
-        # nominal_patch_embeddings: [N,D]
-        nn = NearestNeighbors(n_neighbors=int(cfg.num_neighbors), algorithm="auto")
+    def fit(
+        cls,
+        cfg: PatchCoreConfig,
+        nominal_patch_embeddings: np.ndarray,
+        *,
+        pca: PCATransform | None = None,
+    ) -> "PatchCoreModel":
+        """Fit the kNN index.
+
+        Args:
+            cfg: configuration
+            nominal_patch_embeddings: [N, D] memory bank used for kNN search.
+            pca: optional PCA transform applied to both query and memory.
+        """
+        nn = NearestNeighbors(n_neighbors=int(cfg.num_neighbors), algorithm="auto", metric=str(cfg.distance_metric))
         nn.fit(nominal_patch_embeddings)
-        return cls(cfg=cfg, memory=nominal_patch_embeddings, nn=nn)
+        return cls(cfg=cfg, memory=nominal_patch_embeddings, nn=nn, pca=pca)
+
+    def _transform(self, X: np.ndarray) -> np.ndarray:
+        if self.pca is None:
+            return X
+        return self.pca.transform(X)
 
     def score_patches(self, patch_embeddings: np.ndarray) -> np.ndarray:
         """Return per-patch anomaly scores for a single image.
@@ -35,7 +54,8 @@ class PatchCoreModel:
     def query(self, patch_embeddings: np.ndarray, n_neighbors: int | None = None) -> tuple[np.ndarray, np.ndarray]:
         if n_neighbors is None:
             n_neighbors = int(self.cfg.num_neighbors)
-        dists, inds = self.nn.kneighbors(patch_embeddings, n_neighbors=n_neighbors, return_distance=True)
+        Xq = self._transform(patch_embeddings)
+        dists, inds = self.nn.kneighbors(Xq, n_neighbors=n_neighbors, return_distance=True)
         return dists, inds
 
     def score_image(self, patch_embeddings: np.ndarray) -> float:

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 # Allow running from repo root without installing as a package.
@@ -31,8 +32,19 @@ from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.explain import build_patch_explanations
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
-from src.utils.paths import derived_output_path
+from src.patchcore.preprocess import pca_from_state
 from src.utils.io import load_patchcore, load_threshold_artifact
+from src.utils.paths import derived_output_path
+from src.utils.provenance import (
+    RUN_RESULT_SCHEMA_VERSION,
+    add_outputs,
+    artifact_reference,
+    build_run_manifest,
+    dataset_reference,
+    manifest_path_for_target,
+    state_dict_sha256,
+    write_run_manifest,
+)
 
 
 def iter_images(root: Path):
@@ -74,11 +86,14 @@ def main() -> None:
     if artifact.backbone_state is not None:
         backbone.load_state_dict(artifact.backbone_state)
     backbone = backbone.to(device)
+    backbone_hash = state_dict_sha256(backbone.state_dict())
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
-    model = PatchCoreModel.fit(cfg, artifact.memory_bank)
+    pca = pca_from_state(artifact.pca_state) if artifact.pca_state is not None else None
+    model = PatchCoreModel.fit(cfg, artifact.memory_bank, pca=pca)
     images_root = Path(args.images)
     threshold = load_threshold_artifact(args.threshold) if args.threshold else None
+    image_paths = list(iter_images(images_root))
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -87,9 +102,37 @@ def main() -> None:
     if maps_dir:
         maps_dir.mkdir(parents=True, exist_ok=True)
 
+    input_artifacts = [artifact_reference(args.model, role="model", kind="patchcore_model")]
+    if args.threshold:
+        input_artifacts.append(artifact_reference(args.threshold, role="threshold", kind="threshold_artifact"))
+    dataset_root = images_root if images_root.is_dir() else images_root.parent
+    manifest_path = manifest_path_for_target(out_path)
+    manifest = build_run_manifest(
+        kind="score_images",
+        entrypoint="scripts/score_images.py",
+        requested_device=str(args.device),
+        seed=artifact.seed,
+        config=asdict(cfg),
+        args=dict(vars(args)),
+        datasets=[
+            dataset_reference(
+                dataset="image_folder",
+                role="score_input",
+                root=dataset_root,
+                files=image_paths,
+                selection={"n_images": len(image_paths)},
+            )
+        ],
+        inputs=input_artifacts,
+        extra={
+            "model_run_id": artifact.artifact_info.get("run_id") if artifact.artifact_info else None,
+            "backbone_sha256": backbone_hash,
+        },
+    )
+
     with out_path.open("w") as f:
         with torch.no_grad():
-            for p in iter_images(images_root):
+            for p in image_paths:
                 img = Image.open(p).convert("RGB")
                 x = tfm(img).unsqueeze(0).to(device)
                 emb, (H, W) = extract_patch_embeddings(
@@ -117,7 +160,13 @@ def main() -> None:
                 else:
                     raise ValueError(f"unknown image_score={cfg.image_score}")
 
-                rec = {"path": str(p), "score": float(s)}
+                rec = {
+                    "path": str(p),
+                    "score": float(s),
+                    "run_id": manifest["run_id"],
+                    "schema_version": RUN_RESULT_SCHEMA_VERSION,
+                    "model_run_id": artifact.artifact_info.get("run_id") if artifact.artifact_info else None,
+                }
                 if threshold is not None:
                     rec["threshold"] = float(threshold.threshold)
                     rec["is_anomaly"] = bool(s >= threshold.threshold)
@@ -138,6 +187,29 @@ def main() -> None:
                     npy.parent.mkdir(parents=True, exist_ok=True)
                     np.save(npy, amap)
 
+    outputs = [
+        artifact_reference(
+            out_path,
+            role="scores",
+            kind="score_jsonl",
+            known_run_id=manifest["run_id"],
+            known_schema_version=RUN_RESULT_SCHEMA_VERSION,
+            known_manifest_path=str(manifest_path.resolve()),
+        )
+    ]
+    if maps_dir is not None:
+        outputs.append(
+            artifact_reference(
+                maps_dir,
+                role="anomaly_maps",
+                kind="score_maps",
+                known_run_id=manifest["run_id"],
+                known_schema_version=RUN_RESULT_SCHEMA_VERSION,
+                known_manifest_path=str(manifest_path.resolve()),
+            )
+        )
+    add_outputs(manifest, outputs)
+    write_run_manifest(out_path, manifest)
     print(f"Wrote {out_path}")
     if maps_dir:
         print(f"Wrote anomaly maps to {maps_dir}")

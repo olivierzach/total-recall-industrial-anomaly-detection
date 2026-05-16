@@ -33,7 +33,18 @@ from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.memory_bank import flatten_embeddings_with_metadata
 from src.patchcore.patchcore import to_numpy
+from src.patchcore.preprocess import fit_pca, pca_state
 from src.utils.io import save_patchcore
+from src.utils.provenance import (
+    RUN_MANIFEST_SCHEMA_VERSION,
+    add_outputs,
+    artifact_reference,
+    build_run_manifest,
+    dataset_reference,
+    manifest_path_for_target,
+    state_dict_sha256,
+    write_run_manifest,
+)
 from src.utils.random import make_numpy_rng, set_global_seed
 
 
@@ -76,6 +87,9 @@ def main() -> None:
     ap.add_argument("--backbone", type=str, default="wide_resnet50_2", help="torchvision backbone (e.g. wide_resnet50_2, vit_b_16)")
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="feature layers to hook (CNN only; for ViT we will default later)")
     ap.add_argument("--image-size", type=int, default=256)
+    ap.add_argument("--distance-metric", type=str, default="euclidean", choices=["euclidean", "cosine"])
+    ap.add_argument("--pca-dim", type=int, default=0, help="If >0, apply PCA (and optional whitening) to patch embeddings before kNN")
+    ap.add_argument("--no-pca-whiten", action="store_true", help="Disable PCA whitening (projection only)")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     set_global_seed(int(args.seed))
@@ -85,6 +99,9 @@ def main() -> None:
         layers=tuple(args.layers),
         image_size=int(args.image_size),
         coreset_ratio=float(args.coreset_ratio),
+        distance_metric=str(args.distance_metric),
+        pca_dim=int(args.pca_dim),
+        pca_whiten=not bool(args.no_pca_whiten),
     )
     device = torch.device(args.device)
 
@@ -123,9 +140,35 @@ def main() -> None:
 
     X = np.concatenate(nominal_patches, axis=0)
 
-    idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
-    Xc = X[idx]
+    pca = None
+    X_for_nn = X
+    if cfg.pca_dim and int(cfg.pca_dim) > 0:
+        pca = fit_pca(X, int(cfg.pca_dim), whiten=bool(cfg.pca_whiten))
+        X_for_nn = pca.transform(X)
+
+    idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+    Xc = X_for_nn[idx]
     meta_c = [memory_metadata[int(i)] for i in idx]
+    backbone_hash = state_dict_sha256(backbone.state_dict())
+    manifest_path = manifest_path_for_target(args.out)
+    manifest = build_run_manifest(
+        kind="fit_nominal_patchcore",
+        entrypoint="scripts/fit_nominal_patchcore.py",
+        requested_device=str(args.device),
+        seed=int(args.seed),
+        config=asdict(cfg),
+        args=dict(vars(args)),
+        datasets=[
+            dataset_reference(
+                dataset="nominal_folder",
+                role="train",
+                root=args.nominal,
+                files=ds.paths,
+                selection={"n_images": len(ds)},
+            )
+        ],
+        extra={"n_images": len(ds), "nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "backbone_sha256": backbone_hash},
+    )
 
     save_patchcore(
         args.out,
@@ -134,7 +177,31 @@ def main() -> None:
         backbone_state=backbone.state_dict(),
         memory_metadata=meta_c,
         seed=int(args.seed),
+        pca_state=(pca_state(pca) if pca is not None else None),
+        artifact_info={
+            "schema_version": RUN_MANIFEST_SCHEMA_VERSION,
+            "run_id": manifest["run_id"],
+            "manifest_path": str(manifest_path.resolve()),
+            "seed": int(args.seed),
+            "kind": "patchcore_model",
+            "nominal_dir": str(Path(args.nominal).resolve()),
+            "backbone_sha256": backbone_hash,
+        },
     )
+    add_outputs(
+        manifest,
+        [
+            artifact_reference(
+                args.out,
+                role="model",
+                kind="patchcore_model",
+                known_run_id=manifest["run_id"],
+                known_schema_version=RUN_MANIFEST_SCHEMA_VERSION,
+                known_manifest_path=str(manifest_path.resolve()),
+            )
+        ],
+    )
+    write_run_manifest(args.out, manifest)
 
     print(
         {
@@ -144,6 +211,8 @@ def main() -> None:
             "coreset": int(Xc.shape[0]),
             "cfg": asdict(cfg),
             "seed": int(args.seed),
+            "run_id": manifest["run_id"],
+            "manifest_path": str(manifest_path.resolve()),
             "out": str(Path(args.out).resolve()),
         }
     )
