@@ -33,4 +33,8 @@ Mac mini note:
 Start here:
 - `docs/PLAN.md`
 - `docs/CORE_READING.md` (what to read to understand/apply PatchCore)
+- `docs/INDUSTRIAL_RIGOR_CHECKLIST.md` (how to ship/present with rigor)
+- `docs/EVAL_PROTOCOL.md`
+- `docs/BASELINE_LADDER.md`
+- `docs/DEFECT_LOOKUP.md` (extending anomaly detection with known failure-mode lookup)
 - `docs/RELATED_WORK.md`
