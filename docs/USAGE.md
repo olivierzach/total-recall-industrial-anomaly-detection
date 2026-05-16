@@ -75,6 +75,7 @@ python3 scripts/fit_nominal_patchcore.py --nominal data/web_nominal/my_product -
 ```
 
 See also `docs/DEV_CONFIG.md` for a fast-iteration path.
+See also `docs/GPU_ACCEL.md` for running on the Mac mini GPU via PyTorch MPS.
 
 ## 6) Run tests
 
