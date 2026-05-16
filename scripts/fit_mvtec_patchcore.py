@@ -12,8 +12,12 @@ Example:
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import asdict
 from pathlib import Path
+
+# Allow running from repo root without installing as a package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import torch
@@ -21,6 +25,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from src.data.mvtec import MVTecADDataset
+from src.data.collate import collate_batch
 from src.patchcore import PatchCoreConfig
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.coreset import KCenterGreedy
@@ -54,7 +59,7 @@ def main() -> None:
     )
 
     train_ds = MVTecADDataset(args.mvtec_root, args.category, "train", transform=tfm)
-    train_dl = DataLoader(train_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers))
+    train_dl = DataLoader(train_ds, batch_size=int(args.batch), shuffle=False, num_workers=int(args.num_workers), collate_fn=collate_batch)
 
     backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
     hooks = FeatureHooks(backbone, list(cfg.layers))
