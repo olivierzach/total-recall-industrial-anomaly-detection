@@ -39,4 +39,6 @@ Start here:
 - `docs/DEFECT_LOOKUP.md` (extending anomaly detection with known failure-mode lookup)
 - `docs/ABLATIONS_DISTANCE_METRICS.md` (euclidean vs cosine vs PCA-whitened kNN)
 - `docs/QUERY_ADAPTIVE_MEMORY.md` (query-adaptive nominal selection; patch vs image routing)
+- `docs/IVF.md` (what IVF indexing is; how it maps to PatchCore retrieval)
+- `docs/DEFECT_BANK_UNSUPERVISED.md` (cluster anomalies to bootstrap defect memory bank)
 - `docs/RELATED_WORK.md`
