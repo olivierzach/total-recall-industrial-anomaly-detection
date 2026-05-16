@@ -34,6 +34,16 @@ Run:
 python3 scripts/mvtec_get.py --help
 ```
 
+## BTAD (easy-access alternative)
+
+BTAD (BeanTech Anomaly Detection Dataset) can be downloaded without login via DatasetNinja/Supervisely hosting.
+
+```bash
+python3 scripts/btad_get.py --out data/btad
+```
+
+This fetches a tar in Supervisely project format (see `docs/BTAD.md`).
+
 Recommended workflow:
 1) Download the dataset archive manually (or from your company mirror).
 2) Place it somewhere like `data/raw/mvtec_ad.zip`.
