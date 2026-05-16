@@ -7,8 +7,11 @@ This is the practical path for getting PatchCore running on a **new computer** a
 - git
 
 Optional (Mac GPU): Apple Silicon + PyTorch MPS (see `docs/GPU_ACCEL.md`).
+On the tested Mac mini setup, the most reliable MPS path was a dedicated Python 3.11 env run from a normal shell / `tmux`.
 
 ## 1) Install
+
+CPU / general install:
 
 ```bash
 git clone <REPO_URL>
@@ -18,6 +21,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
+```
+
+Mac mini GPU (tested path):
+
+```bash
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -U pip
+pip install torch torchvision scikit-learn
+pip install -e . --no-deps
 ```
 
 ## 2) Fit a model (build a nominal memory bank)
@@ -30,7 +43,7 @@ Assume you have:
 Run:
 
 ```bash
-python3 scripts/fit_nominal_patchcore.py \
+.venv311/bin/python scripts/fit_nominal_patchcore.py \
   --nominal ~/data/nominal_dishes \
   --out outputs/models/dishes_camA \
   --device mps \
@@ -51,7 +64,7 @@ Notes:
 ## 3) Score new images
 
 ```bash
-python3 scripts/score_images.py \
+.venv311/bin/python scripts/score_images.py \
   --model outputs/models/dishes_camA \
   --images ~/data/new_dishes_batch \
   --device mps \
@@ -70,4 +83,5 @@ See `scripts/viz_anomaly_maps.py`.
 ## Troubleshooting
 
 - If `--device mps` errors, fall back to `--device cpu`.
+- If `mps_built=True` but `mps_available=False`, verify you are running from a normal local shell / `tmux`; the sandboxed agent runtime on this machine could not access MPS even though the hardware supported it.
 - If you’re on Linux with an NVIDIA GPU, use `--device cuda`.

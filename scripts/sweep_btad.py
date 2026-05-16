@@ -16,6 +16,7 @@ import argparse
 import itertools
 import json
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +45,7 @@ def run_one(btad_root: str, device: str, batch: int, num_workers: int, max_train
         return out_path
 
     cmd = [
-        "python3",
+        sys.executable,
         "scripts/eval_btad_patchcore.py",
         "--btad-root",
         btad_root,

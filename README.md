@@ -22,10 +22,14 @@ This repo is a practical, local re-implementation + experimentation harness for:
 - Fast dev iteration: `docs/DEV_CONFIG.md`
 - Mac mini GPU (MPS): `docs/GPU_ACCEL.md`
 - Sweeps (BTAD): `docs/SWEEPS.md`
+- Datasets + official MVTec links: `docs/DATASETS.md`
+
+Mac mini note:
+- MPS works on the tested Apple Silicon machine when launched from a normal shell / `tmux`.
+- The sandboxed agent runtime may report `mps_available=False` even though the machine itself supports MPS.
 
 ## Next steps
 
 Start here:
 - `docs/PLAN.md`
 - `docs/RELATED_WORK.md`
-

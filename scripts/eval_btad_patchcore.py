@@ -36,9 +36,10 @@ from src.patchcore import PatchCoreConfig
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
-from src.patchcore.metrics import auroc
+from src.patchcore.metrics import auroc, classification_metrics
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
 from src.patchcore.pro import compute_pro_auc
+from src.utils.io import load_threshold_artifact
 from src.utils.random import make_numpy_rng, set_global_seed
 
 
@@ -75,6 +76,7 @@ def main() -> None:
     ap.add_argument("--max-test", type=int, default=0, help="If set, cap number of test images (fast smoke)")
     ap.add_argument("--log-every", type=int, default=50, help="Progress logging cadence (batches)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--threshold", type=str, default=None, help="Optional threshold artifact JSON for operational metrics")
     args = ap.parse_args()
     set_global_seed(int(args.seed))
 
@@ -248,6 +250,7 @@ def main() -> None:
     y_true = np.asarray(y_true)
     y_score = np.asarray(y_score)
     image_auroc = auroc(y_true, y_score)
+    threshold_eval = None
 
     pixel_auc = float("nan")
     pro_auc = float("nan")
@@ -262,10 +265,15 @@ def main() -> None:
         masks_2d = [px_true_arr[i] for i in range(px_true_arr.shape[0])]
         pro_auc = compute_pro_auc(scores_2d, masks_2d, fpr_limit=0.3, n_thresholds=200).pro_auc
     timing["metric_s"] = time.time() - t0
+    if args.threshold:
+        thr = load_threshold_artifact(args.threshold)
+        threshold_eval = classification_metrics(y_true, y_score, thr.threshold)
+        threshold_eval["source"] = str(Path(args.threshold).resolve())
 
     timing["total_s"] = time.time() - t_total0
 
     out = {
+        "dataset": "btad",
         "cfg": asdict(cfg),
         "n_train": len(train_ds),
         "n_test": len(test_ds),
@@ -274,6 +282,8 @@ def main() -> None:
         "timing": timing,
         "seed": int(args.seed),
     }
+    if threshold_eval is not None:
+        out["threshold_eval"] = threshold_eval
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

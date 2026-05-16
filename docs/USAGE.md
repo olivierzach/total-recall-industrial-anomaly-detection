@@ -90,3 +90,22 @@ See also `docs/GPU_ACCEL.md` for running on the Mac mini GPU via PyTorch MPS.
 python3 -m pip install -e .[dev]
 pytest -q
 ```
+
+## 7) Plot and review experiments
+
+Aggregate eval JSONs and sweep summaries into comparable plots:
+
+```bash
+python3 scripts/plot_experiments.py outputs --outdir outputs/reports/all_runs
+```
+
+Extract qualitative examples from a labeled dataset split:
+
+```bash
+python3 scripts/review_dataset_examples.py \
+  --dataset mvtec --root data/mvtec --category bottle \
+  --model outputs/models/bottle \
+  --threshold outputs/threshold.json \
+  --select fp --top-n 12 \
+  --outdir outputs/review/bottle_fp
+```

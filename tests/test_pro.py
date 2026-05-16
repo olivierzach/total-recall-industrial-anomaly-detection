@@ -1,5 +1,6 @@
 import numpy as np
 
+from src.patchcore.metrics import classification_metrics
 from src.patchcore.pro import compute_pro_auc
 
 
@@ -18,3 +19,13 @@ def test_pro_auc_smoke():
     assert 0.0 <= res.pro_auc <= 1.0
     # Should be reasonably high for this trivial case.
     assert res.pro_auc > 0.5
+
+
+def test_classification_metrics_smoke():
+    y_true = np.array([0, 0, 1, 1], dtype=np.int64)
+    y_score = np.array([0.1, 0.8, 0.7, 0.2], dtype=np.float32)
+    res = classification_metrics(y_true, y_score, threshold=0.5)
+    assert res["tp"] == 1
+    assert res["fp"] == 1
+    assert res["tn"] == 1
+    assert res["fn"] == 1

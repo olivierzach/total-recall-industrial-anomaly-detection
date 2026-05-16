@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -49,6 +50,8 @@ def main() -> None:
     ap.add_argument("--image-size", type=int, default=256)
     ap.add_argument("--out", type=str, required=True)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-train", type=int, default=0, help="If set, cap number of train images for a smoke run")
+    ap.add_argument("--log-every", type=int, default=25, help="Progress logging cadence (batches)")
     args = ap.parse_args()
     set_global_seed(int(args.seed))
 
@@ -76,8 +79,10 @@ def main() -> None:
 
     nominal_patches = []
     memory_metadata = []
+    n_train_seen = 0
+    t0 = time.time()
     with torch.no_grad():
-        for batch in train_dl:
+        for bi, batch in enumerate(train_dl):
             x = batch.image.to(device)  # type: ignore
             emb, hw = extract_patch_embeddings(
                 backbone_name=cfg.backbone,
@@ -92,6 +97,12 @@ def main() -> None:
             flat, meta = flatten_embeddings_with_metadata(emb_np, list(batch.path), hw)
             nominal_patches.append(flat)
             memory_metadata.extend(meta)
+            n_train_seen += int(x.shape[0])
+            if args.log_every and (bi + 1) % int(args.log_every) == 0:
+                print(f"[fit/train] batches={bi+1} images={n_train_seen}", flush=True)
+            if args.max_train and n_train_seen >= int(args.max_train):
+                print(f"[fit/train] stopping early at images={n_train_seen} due to --max-train", flush=True)
+                break
 
     X = np.concatenate(nominal_patches, axis=0)
 
@@ -111,11 +122,12 @@ def main() -> None:
 
     out = {
         "category": args.category,
-        "n_train": len(train_ds),
+        "n_train": n_train_seen if args.max_train else len(train_ds),
         "nominal_patches": int(X.shape[0]),
         "coreset": int(Xc.shape[0]),
         "cfg": asdict(cfg),
         "seed": int(args.seed),
+        "fit_s": time.time() - t0,
         "out": str(Path(args.out).resolve()),
     }
     print(out)
