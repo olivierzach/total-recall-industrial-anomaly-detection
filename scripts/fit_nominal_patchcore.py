@@ -84,6 +84,16 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--num-workers", type=int, default=2)
     ap.add_argument("--coreset-ratio", type=float, default=0.02)
+    ap.add_argument(
+        "--coreset-method",
+        type=str,
+        default="kcenter",
+        choices=["kcenter", "random", "kmeans"],
+        help="kcenter is expensive; random is fast baseline; kmeans uses prototype centroids",
+    )
+    ap.add_argument("--kmeans-iters", type=int, default=50, help="Only used for --coreset-method kmeans")
+    ap.add_argument("--cache-memory", action="store_true", help="Cache computed coreset memory bank to speed up retries")
+
     ap.add_argument("--backbone", type=str, default="wide_resnet50_2", help="torchvision backbone (e.g. wide_resnet50_2, vit_b_16)")
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="feature layers to hook (CNN only; for ViT we will default later)")
     ap.add_argument("--image-size", type=int, default=256)
@@ -146,9 +156,47 @@ def main() -> None:
         pca = fit_pca(X, int(cfg.pca_dim), whiten=bool(cfg.pca_whiten))
         X_for_nn = pca.transform(X)
 
-    idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
-    Xc = X_for_nn[idx]
-    meta_c = [memory_metadata[int(i)] for i in idx]
+    # Optionally load cached memory bank (post-PCA) for speed/retries.
+    cache_path = None
+    if args.cache_memory:
+        out_dir = Path(args.out)
+        cache_path = out_dir / "memory_cache.npz"
+        if cache_path.exists():
+            data = dict(np.load(cache_path))
+            Xc = data["memory_bank"].astype(np.float32)
+            idx = None
+        else:
+            Xc = None
+            idx = None
+    else:
+        Xc = None
+        idx = None
+
+    if Xc is None:
+        if args.coreset_method == "random":
+            rng = make_numpy_rng(args.seed)
+            N = X_for_nn.shape[0]
+            k = max(1, int(np.ceil(float(cfg.coreset_ratio) * N)))
+            idx = rng.choice(N, size=k, replace=False)
+            Xc = X_for_nn[idx]
+        elif args.coreset_method == "kmeans":
+            from sklearn.cluster import MiniBatchKMeans
+
+            N = X_for_nn.shape[0]
+            k = max(1, int(np.ceil(float(cfg.coreset_ratio) * N)))
+            km = MiniBatchKMeans(n_clusters=int(k), batch_size=4096, n_init=1, max_iter=int(args.kmeans_iters), random_state=int(args.seed))
+            km.fit(X_for_nn)
+            Xc = km.cluster_centers_.astype(np.float32, copy=False)
+            idx = None
+        else:
+            idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+            Xc = X_for_nn[idx]
+
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(cache_path, memory_bank=Xc.astype(np.float32, copy=False), selected_indices=(idx.astype(np.int64) if idx is not None else np.array([], dtype=np.int64)))
+
+    meta_c = [memory_metadata[int(i)] for i in idx] if idx is not None else None
     backbone_hash = state_dict_sha256(backbone.state_dict())
     manifest_path = manifest_path_for_target(args.out)
     manifest = build_run_manifest(
@@ -186,6 +234,7 @@ def main() -> None:
             "kind": "patchcore_model",
             "nominal_dir": str(Path(args.nominal).resolve()),
             "backbone_sha256": backbone_hash,
+            "coreset_method": str(args.coreset_method),
         },
     )
     add_outputs(
