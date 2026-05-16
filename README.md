@@ -21,6 +21,7 @@ This repo is a practical, local re-implementation + experimentation harness for:
 - New machine + your own nominal images: `docs/FROM_SCRATCH.md`
 - Fast dev iteration: `docs/DEV_CONFIG.md`
 - Mac mini GPU (MPS): `docs/GPU_ACCEL.md`
+- Sweeps (BTAD): `docs/SWEEPS.md`
 
 ## Next steps
 

@@ -6,7 +6,7 @@ Rationale: git history is the source of truth, but a curated log helps when youâ
 
 ## Unreleased
 
-- Add BTAD sweep runner (`scripts/sweep_btad.py`) and expose more eval knobs in `eval_btad_patchcore.py`.
+- Add Makefile targets + sweep docs for running BTAD sweeps (incl. varying k).
 
 ## 2026-03-11
 
