@@ -74,6 +74,8 @@ Then fit:
 python3 scripts/fit_nominal_patchcore.py --nominal data/web_nominal/my_product --out outputs/models/my_product
 ```
 
+See also `docs/DEV_CONFIG.md` for a fast-iteration path.
+
 ## 6) Run tests
 
 ```bash

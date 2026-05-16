@@ -37,6 +37,7 @@ from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.patchcore.pro import compute_pro_auc
 
 
 def pixel_auroc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -191,15 +192,23 @@ def main() -> None:
     image_auroc = auroc(y_true, y_score)
 
     pixel_auc = float("nan")
+    pro_auc = float("nan")
     if px_true:
-        pixel_auc = pixel_auroc(np.stack(px_true), np.stack(px_score))
+        px_true_arr = np.stack(px_true)
+        px_score_arr = np.stack(px_score)
+        pixel_auc = pixel_auroc(px_true_arr, px_score_arr)
+
+        # PRO expects per-image 2D arrays.
+        scores_2d = [px_score_arr[i] for i in range(px_score_arr.shape[0])]
+        masks_2d = [px_true_arr[i] for i in range(px_true_arr.shape[0])]
+        pro_auc = compute_pro_auc(scores_2d, masks_2d, fpr_limit=0.3, n_thresholds=200).pro_auc
 
     out = {
         "cfg": asdict(cfg),
         "n_train": len(train_ds),
         "n_test": len(test_ds),
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
-        "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc},
+        "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc, "pro_auc": pro_auc},
     }
 
     out_path = Path(args.out)

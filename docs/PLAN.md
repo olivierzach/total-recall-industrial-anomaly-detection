@@ -26,7 +26,8 @@ PatchCore:
 ### Progress log (BTAD)
 - ✅ BTAD downloaded + extracted automatically.
 - ✅ ViT-B/16 baseline ran end-to-end on BTAD (coreset_ratio=0.0005): image AUROC ~0.8285, pixel AUROC ~0.7427.
-- ⏳ WRN50-2 BTAD run was interrupted (SIGTERM); will rerun with better progress logging + fast-smoke mode.
+- ✅ WRN50-2 smoke run (max_train=256, max_test=256, coreset_ratio=0.0005): image AUROC ~0.9897, pixel AUROC ~0.6431.
+- ⏳ Next: add PRO metric (in progress) and run full WRN50-2 + ViT baselines with PRO.
 
 ### M1 — Minimal baseline
 - [x] Dataset loader: MVTec AD (train=nominal, test=mixed)
