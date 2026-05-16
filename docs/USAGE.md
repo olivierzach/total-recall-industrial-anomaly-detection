@@ -56,7 +56,25 @@ Output JSONL example:
 {"path":"/path/to/img.png","score":1.234}
 ```
 
-## 5) Run tests
+## 5) Gather nominal images from the web (optional)
+
+Only do this when you have rights to use the images. Avoid scraping sources whose terms forbid it.
+
+Workflow:
+1) In chat, use web search to find a few relevant product gallery pages.
+2) Feed those page URLs into:
+
+```bash
+python3 scripts/fetch_nominal_web_images.py --pages <url1> <url2> --out data/web_nominal/my_product --limit 300
+```
+
+Then fit:
+
+```bash
+python3 scripts/fit_nominal_patchcore.py --nominal data/web_nominal/my_product --out outputs/models/my_product
+```
+
+## 6) Run tests
 
 ```bash
 python3 -m pip install -e .[dev]
