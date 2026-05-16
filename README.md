@@ -42,4 +42,5 @@ Start here:
 - `docs/IVF.md` (what IVF indexing is; how it maps to PatchCore retrieval)
 - `docs/DEFECT_BANK_UNSUPERVISED.md` (cluster anomalies to bootstrap defect memory bank)
 - `docs/LIGHTING_AND_CAPTURE.md` (lighting/camera risks + early go/no-go tests)
+- `docs/RUN_STABILITY.md` (avoid SIGKILL; caching + iteration knobs)
 - `docs/RELATED_WORK.md`

@@ -70,6 +70,8 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--num-workers", type=int, default=2)
     ap.add_argument("--coreset-ratio", type=float, default=0.1)
+    ap.add_argument("--coreset-method", type=str, default="kcenter", choices=["kcenter", "random"], help="kcenter is expensive; random is fast baseline")
+    ap.add_argument("--cache-memory", action="store_true", help="Cache computed coreset memory bank to speed up ablations")
     ap.add_argument("--num-neighbors", type=int, default=1, help="k for kNN distance (PatchCore scoring)")
     ap.add_argument("--image-score", type=str, default="max", choices=["max", "mean"], help="aggregate patch scores into image score")
     ap.add_argument(
@@ -225,10 +227,34 @@ def main() -> None:
         pca = fit_pca(X, int(cfg.pca_dim), whiten=bool(cfg.pca_whiten))
         X_for_nn = pca.transform(X)
 
-    t0 = time.time()
-    idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
-    timing["coreset_s"] = time.time() - t0
-    Xc = X_for_nn[idx]
+    # Optionally load cached memory bank (post-PCA) for faster ablations.
+    cache_path = None
+    if args.cache_memory:
+        outp = Path(args.out)
+        cache_path = outp.with_suffix("").with_suffix(".memory_cache.npz")
+        if cache_path.exists():
+            data = dict(np.load(cache_path))
+            Xc = data["memory_bank"].astype(np.float32)
+            timing["coreset_s"] = 0.0
+        else:
+            Xc = None
+    else:
+        Xc = None
+
+    if Xc is None:
+        t0 = time.time()
+        if args.coreset_method == "random":
+            rng = make_numpy_rng(args.seed)
+            N = X_for_nn.shape[0]
+            k = max(1, int(np.ceil(float(cfg.coreset_ratio) * N)))
+            idx = rng.choice(N, size=k, replace=False)
+        else:
+            idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+        timing["coreset_s"] = time.time() - t0
+        Xc = X_for_nn[idx]
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(cache_path, memory_bank=Xc.astype(np.float32, copy=False))
 
     t0 = time.time()
     model = PatchCoreModel.fit(cfg, Xc, pca=pca)
