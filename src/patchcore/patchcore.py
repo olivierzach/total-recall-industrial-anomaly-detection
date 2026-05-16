@@ -40,6 +40,19 @@ class PatchCoreModel:
             return float(np.mean(s))
         raise ValueError(f"unknown image_score={self.cfg.image_score}")
 
+    def score_map(self, patch_embeddings: np.ndarray, hw: tuple[int, int]) -> np.ndarray:
+        """Return an anomaly map in patch-grid space.
+
+        patch_embeddings: [P,D]
+        hw: (H,W) such that P == H*W
+        returns: [H,W] float32
+        """
+        H, W = hw
+        s = self.score_patches(patch_embeddings)
+        if s.shape[0] != H * W:
+            raise ValueError(f"Patches {s.shape[0]} != H*W {H*W}")
+        return s.reshape(H, W).astype(np.float32, copy=False)
+
 
 def to_numpy(x: torch.Tensor) -> np.ndarray:
     return x.detach().cpu().numpy().astype(np.float32, copy=False)

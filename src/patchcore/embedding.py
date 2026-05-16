@@ -18,7 +18,8 @@ def patch_embeddings(
     layer_order: Iterable[str],
     *,
     l2_normalize: bool = True,
-) -> torch.Tensor:
+    return_hw: bool = False,
+) -> torch.Tensor | tuple[torch.Tensor, tuple[int, int]]:
     """Create patch embeddings by resizing features to a common grid and concatenating channels.
 
     Returns: embeddings [B, H*W, D]
@@ -43,4 +44,6 @@ def patch_embeddings(
     if l2_normalize:
         emb = F.normalize(emb, p=2, dim=-1)
 
+    if return_hw:
+        return emb, (H, W)
     return emb
