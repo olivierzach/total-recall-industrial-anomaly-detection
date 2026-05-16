@@ -28,6 +28,21 @@ python3 scripts/eval_mvtec_patchcore.py --mvtec-root data/mvtec --category bottl
 python3 scripts/score_images.py --model outputs/models/bottle --images /path/to/images --out outputs/scores.jsonl
 ```
 
+Optionally also save patch-grid anomaly maps for triage:
+
+```bash
+python3 scripts/score_images.py --model outputs/models/bottle --images /path/to/images \
+  --out outputs/scores.jsonl --save-maps outputs/maps
+
+python3 scripts/viz_anomaly_maps.py --images /path/to/images --maps outputs/maps --out outputs/overlays
+```
+
+Calibrate an operational threshold from nominal calibration images:
+
+```bash
+python3 scripts/calibrate_threshold.py --scores outputs/scores.jsonl --target-fpr 0.001
+```
+
 Output JSONL example:
 ```json
 {"path":"/path/to/img.png","score":1.234}
