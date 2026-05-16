@@ -55,8 +55,9 @@ def main() -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    import sys as _sys
     base = [
-        "python3",
+        _sys.executable,
         "scripts/eval_mvtec_patchcore.py",
         "--mvtec-root",
         str(args.mvtec_root),
