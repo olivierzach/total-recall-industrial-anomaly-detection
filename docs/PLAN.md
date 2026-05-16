@@ -15,17 +15,25 @@ PatchCore:
 
 ## 2) Milestones
 
+### Current status (updated)
+- Implemented a self-owned PatchCore MVP and a minimal MVTec loader.
+- Added dataset unpack helper, model save/load, and a QA-style scoring script.
+- Added pytest suite for core utilities.
+- Next: pixel-level anomaly maps + PRO metric + second dataset pipeline.
+
 ### M1 — Minimal baseline
-- [ ] Dataset loader: MVTec AD (train=nominal, test=mixed)
-- [ ] Backbone feature extraction (torchvision WRN50 / ResNet)
-- [ ] Patch embedding extraction (layer selection + concatenation)
-- [ ] Memory bank construction
-- [ ] Scoring (kNN / FAISS optional)
-- [ ] Metrics: image AUROC, pixel AUROC, PRO (as in literature)
-- [ ] Deterministic run config + seeds
+- [x] Dataset loader: MVTec AD (train=nominal, test=mixed)
+- [x] Backbone feature extraction (torchvision WRN50 / ResNet)
+- [x] Patch embedding extraction (layer selection + concatenation)
+- [x] Memory bank construction
+- [x] Scoring (kNN; FAISS optional later)
+- [~] Metrics: image AUROC (done), pixel AUROC + PRO (next)
+- [ ] Deterministic run config + seeds (next)
+- [x] QA pipeline: fit → save model → score arbitrary images
+- [x] Test suite for core components (coreset/embedding/loader)
 
 ### M2 — Faithful reproduction knobs
-- [ ] Implement k-Center Greedy coreset (bank subsampling)
+- [x] Implement k-Center Greedy coreset (bank subsampling)
 - [ ] Add Gaussian smoothing / normalization as needed
 - [ ] Compare layer choices, embedding dims, patch strides
 - [ ] Validate against reported numbers (within tolerance)
