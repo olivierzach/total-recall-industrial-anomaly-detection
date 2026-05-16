@@ -23,6 +23,11 @@ PatchCore:
 - Added QA workflow doc: `docs/QA_WORKFLOW.md`.
 - Added ViT backbone scaffolding doc: `docs/VIT.md`.
 
+### Progress log (BTAD)
+- ✅ BTAD downloaded + extracted automatically.
+- ✅ ViT-B/16 baseline ran end-to-end on BTAD (coreset_ratio=0.0005): image AUROC ~0.8285, pixel AUROC ~0.7427.
+- ⏳ WRN50-2 BTAD run was interrupted (SIGTERM); will rerun with better progress logging + fast-smoke mode.
+
 ### M1 — Minimal baseline
 - [x] Dataset loader: MVTec AD (train=nominal, test=mixed)
 - [x] Backbone feature extraction (torchvision WRN50 / ResNet)

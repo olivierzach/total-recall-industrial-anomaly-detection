@@ -59,6 +59,9 @@ def main() -> None:
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="CNN feature layers; ignored for ViT")
     ap.add_argument("--image-size", type=int, default=256)
     ap.add_argument("--out", type=str, default="outputs/btad_patchcore_result.json")
+    ap.add_argument("--max-train", type=int, default=0, help="If set, cap number of nominal train images (fast smoke)")
+    ap.add_argument("--max-test", type=int, default=0, help="If set, cap number of test images (fast smoke)")
+    ap.add_argument("--log-every", type=int, default=50, help="Progress logging cadence (batches)")
     args = ap.parse_args()
 
     cfg = PatchCoreConfig(
@@ -106,8 +109,9 @@ def main() -> None:
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     nominal_patches = []
+    n_train_seen = 0
     with torch.no_grad():
-        for batch in train_dl:
+        for bi, batch in enumerate(train_dl):
             x = batch.image.to(device)  # type: ignore
             emb = extract_patch_embeddings(
                 backbone_name=cfg.backbone,
@@ -121,6 +125,11 @@ def main() -> None:
             if isinstance(emb, tuple):
                 emb = emb[0]
             nominal_patches.append(to_numpy(emb.reshape(-1, emb.shape[-1])))
+            n_train_seen += int(x.shape[0])
+            if args.log_every and (bi + 1) % int(args.log_every) == 0:
+                print(f"[train] batches={bi+1} images={n_train_seen}")
+            if args.max_train and n_train_seen >= int(args.max_train):
+                break
 
     X = np.concatenate(nominal_patches, axis=0)
 
@@ -135,8 +144,9 @@ def main() -> None:
     px_true = []
     px_score = []
 
+    n_test_seen = 0
     with torch.no_grad():
-        for batch in test_dl:
+        for bi, batch in enumerate(test_dl):
             x = batch.image.to(device)  # type: ignore
             labels = batch.label.numpy().astype(np.int64)  # type: ignore
             masks = batch.mask  # type: ignore
@@ -163,13 +173,18 @@ def main() -> None:
                     m = masks[i]
                     if m is None:
                         continue
-                    # m: [1, Himg, Wimg] in {0,1}
                     amap = model.score_map(emb_np[i], (H, W))  # [H,W]
                     amap_t = torch.from_numpy(amap)[None, None, ...].to(device)
                     amap_up = F.interpolate(amap_t, size=(cfg.image_size, cfg.image_size), mode="bilinear", align_corners=False)[0, 0]
 
                     px_true.append((m[0] > 0.5).cpu().numpy().astype(np.uint8))
                     px_score.append(amap_up.cpu().numpy().astype(np.float32))
+
+            n_test_seen += int(x.shape[0])
+            if args.log_every and (bi + 1) % int(args.log_every) == 0:
+                print(f"[test] batches={bi+1} images={n_test_seen}")
+            if args.max_test and n_test_seen >= int(args.max_test):
+                break
 
     y_true = np.asarray(y_true)
     y_score = np.asarray(y_score)
