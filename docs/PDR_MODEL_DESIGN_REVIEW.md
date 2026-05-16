@@ -73,9 +73,31 @@ Given images from one or more industrial stations/products, detect defects under
 - Thresholding procedure defined and repeatable.
 - Automated logs/manifests include dataset identity and config.
 
+### 3.4 Acceptance criteria (ship/no-ship gates)
+Define *explicit* go/no-go gates before iterating too far:
+
+- **Operational point:** choose a target FPR (or inspections/hour) and report **recall at that operating point**.
+- **Stability:** report variability across seeds and across nominal subsets; require that key metrics are stable within a preset band.
+- **Shift suite:** require passing performance floors under the agreed shift tests (lighting, small misalignment, blur/noise).
+- **Latency/memory:** require meeting target ms/image and memory footprint on the target device.
+- **Explainability:** require a qualitative panel (top FPs/FNs + retrieved exemplars) for every milestone.
+
+> Suggested default gate for an MVP: demonstrate recall@target-FPR that exceeds the current manual/legacy baseline, with stable performance across at least 3 seeds and 2 split variants.
+
+---
+
 ---
 
 ## 4) Data and split design
+
+### 4.0 Data provenance (top-lab rigor)
+For any dataset used in a result claim, record:
+- data source (station/camera), collection window, and any known process changes
+- exact file list or hash manifest
+- preprocessing version (code commit hash)
+
+The run manifest should be sufficient to reproduce a result from raw inputs.
+
 
 ### 4.1 Data units
 - **Image**: a single capture.
@@ -171,6 +193,22 @@ Given images from one or more industrial stations/products, detect defects under
 
 ## 7) Evaluation plan
 
+### 7.0 Statistical methodology (make claims defensible)
+- Prefer **paired comparisons** when possible (same test set, two methods) and report deltas.
+- Provide uncertainty estimates:
+  - bootstrap CIs for image-level metrics (AUROC, recall@FPR)
+  - seed sweeps for any training-time randomness
+- Avoid single-number claims without:
+  - split definition
+  - threshold selection rule
+  - confidence interval or stability report
+
+### 7.0.1 Thresholding discipline
+- Treat threshold as part of the model.
+- Calibrate threshold on a *held-out nominal* set that matches deployment.
+- Report achieved test FPR vs target FPR (they differ under shift).
+
+
 ### 7.1 Metrics
 Research:
 - image AUROC
@@ -192,9 +230,26 @@ Operational:
 - top false negatives with maps
 - cluster FP modes (lighting, edges, speculars, etc.)
 
+### 7.4 Evaluation artifacts (what must be saved)
+For each evaluation run, save:
+- the full run manifest (dataset refs, config, git SHA)
+- per-image scores (JSONL)
+- threshold artifact used/derived
+- qualitative panels (or paths to saved heatmaps)
+
+This ensures results are auditable and not “trust me bro.”
+
 ---
 
 ## 8) Risks and mitigations
+
+### 8.0 Failure modes to explicitly test (pre-mortem)
+- **Lighting drift** (day/night, LED aging, exposure changes)
+- **Pose drift** (small translations/rotations, conveyor jitter)
+- **Background/fixture changes** (tape, screws, glare)
+- **Class-imbalance pathology** (FPR looks low but inspection volume too high)
+- **Overconfident defect lookup** (mislabeling novel defects)
+
 
 ### 8.1 Domain shift (lighting/camera drift)
 - Mitigation: shift test suite + capture guidelines + ROI masks
@@ -207,6 +262,15 @@ Operational:
 
 ### 8.4 Parasitic leakage in data split
 - Mitigation: explicit unit grouping; dedup checks
+
+### 8.5 Monitoring and operations (if deployed)
+If this becomes an on-line inspection system:
+- log score distributions (nominal and anomalous) and alert-rate over time
+- monitor achieved FPR/alert-rate against the calibrated target
+- add drift detectors (simple KS tests on scores or embedding summaries)
+- establish a rollback plan (previous memory bank + threshold)
+
+---
 
 ---
 
