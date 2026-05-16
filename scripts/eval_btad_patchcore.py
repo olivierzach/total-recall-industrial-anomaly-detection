@@ -70,7 +70,14 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--num-workers", type=int, default=2)
     ap.add_argument("--coreset-ratio", type=float, default=0.1)
-    ap.add_argument("--coreset-method", type=str, default="kcenter", choices=["kcenter", "random"], help="kcenter is expensive; random is fast baseline")
+    ap.add_argument(
+        "--coreset-method",
+        type=str,
+        default="kcenter",
+        choices=["kcenter", "random", "kmeans"],
+        help="kcenter is expensive; random is fast baseline; kmeans uses prototype centroids",
+    )
+    ap.add_argument("--kmeans-iters", type=int, default=50, help="Only used for --coreset-method kmeans")
     ap.add_argument("--cache-memory", action="store_true", help="Cache computed coreset memory bank to speed up ablations")
     ap.add_argument("--num-neighbors", type=int, default=1, help="k for kNN distance (PatchCore scoring)")
     ap.add_argument("--image-score", type=str, default="max", choices=["max", "mean"], help="aggregate patch scores into image score")
@@ -248,10 +255,21 @@ def main() -> None:
             N = X_for_nn.shape[0]
             k = max(1, int(np.ceil(float(cfg.coreset_ratio) * N)))
             idx = rng.choice(N, size=k, replace=False)
+            Xc = X_for_nn[idx]
+        elif args.coreset_method == "kmeans":
+            # Prototype memory via MiniBatchKMeans centroids.
+            from sklearn.cluster import MiniBatchKMeans
+
+            N = X_for_nn.shape[0]
+            k = max(1, int(np.ceil(float(cfg.coreset_ratio) * N)))
+            km = MiniBatchKMeans(n_clusters=int(k), batch_size=4096, n_init=1, max_iter=int(args.kmeans_iters), random_state=int(args.seed))
+            km.fit(X_for_nn)
+            Xc = km.cluster_centers_.astype(np.float32, copy=False)
         else:
             idx = KCenterGreedy().select(X_for_nn, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
+            Xc = X_for_nn[idx]
+
         timing["coreset_s"] = time.time() - t0
-        Xc = X_for_nn[idx]
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(cache_path, memory_bank=Xc.astype(np.float32, copy=False))
