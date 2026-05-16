@@ -19,8 +19,14 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import sys
 import tarfile
 from pathlib import Path
+
+# Allow running from repo root without installing as a package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.utils.archive import safe_extract_tar
 
 DEFAULT_URL = "https://assets.supervisely.com/remote/eyJsaW5rIjogInMzOi8vc3VwZXJ2aXNlbHktZGF0YXNldHMvMjUyOV9CVEFEL2J0YWQtRGF0YXNldE5pbmphLnRhciIsICJzaWciOiAieUtGa2FWN2RRa3RRdzZIWEN5b0lEV3dDaGNNTGZpbzdRZG16ZW5pQ1dsVT0ifQ==?response-content-disposition=attachment%3B%20filename%3D%22btad-DatasetNinja.tar%22"
 
@@ -48,7 +54,7 @@ def download(url: str, out_path: Path) -> None:
 def extract_tar(archive: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive, "r:*") as t:
-        t.extractall(out_dir)
+        safe_extract_tar(t, out_dir)
 
 
 def main() -> None:

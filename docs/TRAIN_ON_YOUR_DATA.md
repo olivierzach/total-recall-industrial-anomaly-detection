@@ -22,6 +22,7 @@ This is why PatchCore is attractive for industrial QA: you can deploy with **no 
 A model directory containing:
 - `config.json`
 - `memory_bank.npy` (coreset of nominal patch embeddings)
+- `backbone_state.pt` (the exact backbone weights used to build the memory bank)
 
 This artifact is what you deploy to score new images.
 
@@ -187,4 +188,3 @@ Once the baseline works:
 - swap backbone to a ViT and compare (keep same pipeline)
 - implement nearest-neighbor patch retrieval for explanations
 - add PRO metric for localization evaluation (on datasets with masks)
-

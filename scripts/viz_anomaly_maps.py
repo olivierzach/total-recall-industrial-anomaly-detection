@@ -21,12 +21,17 @@ import argparse
 import sys
 from pathlib import Path
 
+# Allow running from repo root without installing as a package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+
+from src.utils.paths import derived_output_path
 
 
 def iter_images(root: Path):
@@ -60,7 +65,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for p in iter_images(images_root):
-        m = maps_dir / (p.stem + ".anomaly_patchgrid.npy")
+        m = maps_dir / derived_output_path(images_root, p, ".anomaly_patchgrid.npy")
         if not m.exists():
             continue
         amap = np.load(m)
@@ -72,7 +77,8 @@ def main() -> None:
         plt.imshow(amap_up, cmap="inferno", alpha=float(args.alpha))
         plt.axis("off")
         fig.tight_layout(pad=0)
-        out_path = out_dir / (p.stem + ".overlay.png")
+        out_path = out_dir / derived_output_path(images_root, p, ".overlay.png")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(out_path, dpi=150)
         plt.close(fig)
 

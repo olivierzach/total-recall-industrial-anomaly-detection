@@ -30,6 +30,7 @@ from torchvision import transforms
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.utils.paths import derived_output_path
 from src.utils.io import load_patchcore
 
 
@@ -45,14 +46,15 @@ def iter_images(root: Path):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", required=True, help="Model directory created by fit_mvtec_patchcore.py")
+    ap.add_argument("--model", required=True, help="Model directory created by fit_*_patchcore.py")
     ap.add_argument("--images", required=True, help="Directory (or file) of images to score")
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", default="outputs/scores.jsonl")
     ap.add_argument("--save-maps", default=None, help="If set, write per-image anomaly maps (.npy) to this directory")
     args = ap.parse_args()
 
-    cfg, memory = load_patchcore(args.model)
+    artifact = load_patchcore(args.model)
+    cfg = artifact.cfg
 
     device = torch.device(args.device)
 
@@ -64,10 +66,14 @@ def main() -> None:
         ]
     )
 
-    backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained).to(device)
+    backbone = load_backbone(cfg.backbone, pretrained=cfg.pretrained and artifact.backbone_state is None)
+    if artifact.backbone_state is not None:
+        backbone.load_state_dict(artifact.backbone_state)
+    backbone = backbone.to(device)
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
-    model = PatchCoreModel.fit(cfg, memory)
+    model = PatchCoreModel.fit(cfg, artifact.memory_bank)
+    images_root = Path(args.images)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +84,7 @@ def main() -> None:
 
     with out_path.open("w") as f:
         with torch.no_grad():
-            for p in iter_images(Path(args.images)):
+            for p in iter_images(images_root):
                 img = Image.open(p).convert("RGB")
                 x = tfm(img).unsqueeze(0).to(device)
                 emb, (H, W) = extract_patch_embeddings(
@@ -98,9 +104,8 @@ def main() -> None:
                 if maps_dir:
                     amap = model.score_map(emb0, (H, W))
                     # Save patch-grid map; visualization script can upsample.
-                    npy = maps_dir / (p.stem + ".anomaly_patchgrid.npy")
-                    import numpy as np
-
+                    npy = maps_dir / derived_output_path(images_root, p, ".anomaly_patchgrid.npy")
+                    npy.parent.mkdir(parents=True, exist_ok=True)
                     np.save(npy, amap)
 
     print(f"Wrote {out_path}")

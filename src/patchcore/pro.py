@@ -167,5 +167,8 @@ def compute_pro_auc(
         fpr_c = np.concatenate([fpr_c, [float(fpr_limit)]])
         pro_c = np.concatenate([pro_c, [pro_c[-1]]])
 
-    auc = float(np.trapezoid(pro_c, fpr_c)) / float(fpr_limit)
+    integrate = getattr(np, "trapezoid", None)
+    if integrate is None:
+        integrate = np.trapz
+    auc = float(integrate(pro_c, fpr_c)) / float(fpr_limit)
     return PROResult(pro_auc=auc, fpr=fprs_u, pro=pros_u)

@@ -14,5 +14,5 @@ def test_vit_embedder_shapes_no_weights():
     toks, (H, W) = emb.embed(x, l2_normalize=False, return_hw=True)
     assert toks.shape[0] == 2
     assert toks.shape[1] == H * W
-    assert toks.shape[2] == toks.shape[2]
+    assert toks.shape[2] == vit.hidden_dim
     assert (H, W) == (224 // 16, 224 // 16)

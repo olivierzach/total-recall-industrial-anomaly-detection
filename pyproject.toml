@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "total-recall-iad"
 version = "0.0.1"
@@ -20,6 +24,9 @@ dependencies = [
 [project.optional-dependencies]
 faiss = ["faiss-cpu"]
 dev = ["ruff", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [tool.ruff]
 line-length = 120

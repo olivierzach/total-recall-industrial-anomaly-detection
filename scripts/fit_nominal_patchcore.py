@@ -120,7 +120,7 @@ def main() -> None:
     idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio)
     Xc = X[idx]
 
-    save_patchcore(args.out, cfg, Xc)
+    save_patchcore(args.out, cfg, Xc, backbone_state=backbone.state_dict())
 
     print(
         {

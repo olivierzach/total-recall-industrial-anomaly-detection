@@ -12,3 +12,4 @@ data/
 runs/
 outputs/
 experiments/**/outputs/
+.pytest_cache

@@ -19,9 +19,15 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import sys
 import tarfile
 import zipfile
 from pathlib import Path
+
+# Allow running from repo root without installing as a package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.utils.archive import safe_extract_tar, safe_extract_zip
 
 
 def download(url: str, out_path: Path) -> None:
@@ -36,11 +42,11 @@ def extract(archive: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     if str(archive).endswith(".zip"):
         with zipfile.ZipFile(archive, "r") as z:
-            z.extractall(out_dir)
+            safe_extract_zip(z, out_dir)
         return
     if any(str(archive).endswith(s) for s in [".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz"]):
         with tarfile.open(archive, "r:*") as t:
-            t.extractall(out_dir)
+            safe_extract_tar(t, out_dir)
         return
     raise ValueError(f"Unknown archive type: {archive}")
 

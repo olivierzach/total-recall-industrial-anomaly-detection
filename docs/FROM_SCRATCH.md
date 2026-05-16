@@ -42,6 +42,7 @@ What you get:
 - `outputs/models/dishes_camA/` which includes:
   - the PatchCore config (backbone, layers, image_size, etc.)
   - the fitted memory bank (coreset embeddings)
+  - the exact backbone weights used for scoring
 
 Notes:
 - The first run will auto-download pretrained backbone weights via torchvision.
