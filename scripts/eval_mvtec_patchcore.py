@@ -23,6 +23,7 @@ from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
+from src.utils.random import make_numpy_rng, set_global_seed
 
 
 def main() -> None:
@@ -37,7 +38,9 @@ def main() -> None:
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="CNN feature layers; ignored for ViT")
     ap.add_argument("--image-size", type=int, default=256)
     ap.add_argument("--out", type=str, default="outputs/mvtec_patchcore_result.json")
+    ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
+    set_global_seed(int(args.seed))
 
     cfg = PatchCoreConfig(
         backbone=str(args.backbone),
@@ -87,7 +90,7 @@ def main() -> None:
 
     # Coreset selection.
     selector = KCenterGreedy()
-    idx = selector.select(X, ratio=cfg.coreset_ratio)
+    idx = selector.select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
     Xc = X[idx]
 
     model = PatchCoreModel.fit(cfg, Xc)
@@ -128,6 +131,7 @@ def main() -> None:
         "n_test": len(test_ds),
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
         "metrics": {"image_auroc": image_auroc},
+        "seed": int(args.seed),
     }
 
     out_path = Path(args.out)

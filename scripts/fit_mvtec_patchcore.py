@@ -30,8 +30,10 @@ from src.patchcore import PatchCoreConfig
 from src.patchcore.backbone import FeatureHooks, load_backbone
 from src.patchcore.coreset import KCenterGreedy
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
+from src.patchcore.memory_bank import flatten_embeddings_with_metadata
 from src.patchcore.patchcore import to_numpy
 from src.utils.io import save_patchcore
+from src.utils.random import make_numpy_rng, set_global_seed
 
 
 def main() -> None:
@@ -46,7 +48,9 @@ def main() -> None:
     ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"])
     ap.add_argument("--image-size", type=int, default=256)
     ap.add_argument("--out", type=str, required=True)
+    ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
+    set_global_seed(int(args.seed))
 
     cfg = PatchCoreConfig(
         backbone=str(args.backbone),
@@ -71,29 +75,39 @@ def main() -> None:
     hooks = None if is_vit_backbone(cfg.backbone) else FeatureHooks(backbone, list(cfg.layers))
 
     nominal_patches = []
+    memory_metadata = []
     with torch.no_grad():
         for batch in train_dl:
             x = batch.image.to(device)  # type: ignore
-            emb = extract_patch_embeddings(
+            emb, hw = extract_patch_embeddings(
                 backbone_name=cfg.backbone,
                 model=backbone,
                 hooks=hooks,
                 x=x,
                 layers=cfg.layers,
                 l2_normalize=cfg.l2_normalize,
-                return_hw=False,
+                return_hw=True,
             )
-            if isinstance(emb, tuple):
-                emb = emb[0]
-            nominal_patches.append(to_numpy(emb.reshape(-1, emb.shape[-1])))
+            emb_np = to_numpy(emb)
+            flat, meta = flatten_embeddings_with_metadata(emb_np, list(batch.path), hw)
+            nominal_patches.append(flat)
+            memory_metadata.extend(meta)
 
     X = np.concatenate(nominal_patches, axis=0)
 
     selector = KCenterGreedy()
-    idx = selector.select(X, ratio=cfg.coreset_ratio)
+    idx = selector.select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
     Xc = X[idx]
+    meta_c = [memory_metadata[int(i)] for i in idx]
 
-    save_patchcore(args.out, cfg, Xc, backbone_state=backbone.state_dict())
+    save_patchcore(
+        args.out,
+        cfg,
+        Xc,
+        backbone_state=backbone.state_dict(),
+        memory_metadata=meta_c,
+        seed=int(args.seed),
+    )
 
     out = {
         "category": args.category,
@@ -101,6 +115,7 @@ def main() -> None:
         "nominal_patches": int(X.shape[0]),
         "coreset": int(Xc.shape[0]),
         "cfg": asdict(cfg),
+        "seed": int(args.seed),
         "out": str(Path(args.out).resolve()),
     }
     print(out)

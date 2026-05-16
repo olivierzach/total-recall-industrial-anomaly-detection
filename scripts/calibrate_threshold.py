@@ -19,11 +19,14 @@ from pathlib import Path
 
 import numpy as np
 
+from src.utils.io import ThresholdArtifact, save_threshold_artifact
+
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scores", required=True, help="JSONL from score_images.py")
     ap.add_argument("--target-fpr", type=float, default=0.001)
+    ap.add_argument("--out", default=None, help="If set, save a threshold artifact JSON")
     args = ap.parse_args()
 
     scores = []
@@ -41,18 +44,22 @@ def main() -> None:
     q = 1.0 - float(args.target_fpr)
     thr = float(np.quantile(scores, q))
 
-    out = {
-        "n": int(scores.shape[0]),
-        "target_fpr": float(args.target_fpr),
-        "quantile": q,
-        "threshold": thr,
-        "score_min": float(scores.min()),
-        "score_med": float(np.median(scores)),
-        "score_p99": float(np.quantile(scores, 0.99)),
-        "score_max": float(scores.max()),
-    }
+    out = ThresholdArtifact(
+        n=int(scores.shape[0]),
+        target_fpr=float(args.target_fpr),
+        quantile=q,
+        threshold=thr,
+        score_min=float(scores.min()),
+        score_med=float(np.median(scores)),
+        score_p99=float(np.quantile(scores, 0.99)),
+        score_max=float(scores.max()),
+        source_scores=str(Path(args.scores).resolve()),
+    )
 
-    print(json.dumps(out, indent=2, sort_keys=True))
+    if args.out:
+        save_threshold_artifact(args.out, out)
+
+    print(json.dumps(out.__dict__, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

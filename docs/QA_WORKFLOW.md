@@ -51,6 +51,7 @@ Run `fit_*` to build the coreset memory bank.
 This repo writes a model directory containing:
 - `config.json`
 - `memory_bank.npy`
+- `memory_metadata.json` for nominal patch provenance
 
 This is the artifact you deploy.
 
@@ -62,6 +63,7 @@ Use `score_images.py` to score:
 - a new supplier run
 
 Outputs a JSONL with per-image anomaly scores.
+If you provide a saved threshold artifact, it can also emit binary anomaly decisions.
 
 ### Step D — Thresholding for operations
 
@@ -126,4 +128,3 @@ To support a real QA workflow, we should add:
 - retrieval: show nearest nominal patches for top anomalies
 - operational metrics: recall@FPR, PR curves, expected inspections
 - dataset abstractions for "your" data (folder of nominal, folder of scored)
-

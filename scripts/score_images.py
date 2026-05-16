@@ -28,10 +28,11 @@ from PIL import Image
 from torchvision import transforms
 
 from src.patchcore.backbone import FeatureHooks, load_backbone
+from src.patchcore.explain import build_patch_explanations
 from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
 from src.utils.paths import derived_output_path
-from src.utils.io import load_patchcore
+from src.utils.io import load_patchcore, load_threshold_artifact
 
 
 def iter_images(root: Path):
@@ -51,6 +52,9 @@ def main() -> None:
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", default="outputs/scores.jsonl")
     ap.add_argument("--save-maps", default=None, help="If set, write per-image anomaly maps (.npy) to this directory")
+    ap.add_argument("--threshold", default=None, help="Optional threshold artifact JSON from calibrate_threshold.py")
+    ap.add_argument("--top-k-neighbors", type=int, default=0, help="If >0, include nearest nominal matches for top anomaly patches")
+    ap.add_argument("--top-k-patches", type=int, default=3, help="How many highest-scoring patches to explain per image")
     args = ap.parse_args()
 
     artifact = load_patchcore(args.model)
@@ -74,6 +78,7 @@ def main() -> None:
 
     model = PatchCoreModel.fit(cfg, artifact.memory_bank)
     images_root = Path(args.images)
+    threshold = load_threshold_artifact(args.threshold) if args.threshold else None
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,12 +102,37 @@ def main() -> None:
                     return_hw=True,
                 )
                 emb0 = to_numpy(emb[0])
-                s = model.score_image(emb0)
+                nn_dists = None
+                nn_inds = None
+                if args.top_k_neighbors > 0:
+                    nn_dists, nn_inds = model.query(emb0, n_neighbors=int(args.top_k_neighbors))
+                    patch_scores = nn_dists[:, 0]
+                else:
+                    patch_scores = model.score_patches(emb0)
+
+                if cfg.image_score == "max":
+                    s = float(np.max(patch_scores))
+                elif cfg.image_score == "mean":
+                    s = float(np.mean(patch_scores))
+                else:
+                    raise ValueError(f"unknown image_score={cfg.image_score}")
+
                 rec = {"path": str(p), "score": float(s)}
+                if threshold is not None:
+                    rec["threshold"] = float(threshold.threshold)
+                    rec["is_anomaly"] = bool(s >= threshold.threshold)
+                if args.top_k_neighbors > 0 and nn_dists is not None and nn_inds is not None:
+                    rec["explanations"] = build_patch_explanations(
+                        nn_dists,
+                        nn_inds,
+                        (H, W),
+                        memory_metadata=artifact.memory_metadata,
+                        top_k_patches=int(args.top_k_patches),
+                    )
                 f.write(json.dumps(rec) + "\n")
 
                 if maps_dir:
-                    amap = model.score_map(emb0, (H, W))
+                    amap = patch_scores.reshape(H, W).astype(np.float32, copy=False)
                     # Save patch-grid map; visualization script can upsample.
                     npy = maps_dir / derived_output_path(images_root, p, ".anomaly_patchgrid.npy")
                     npy.parent.mkdir(parents=True, exist_ok=True)

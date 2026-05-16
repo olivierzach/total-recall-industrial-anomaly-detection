@@ -39,6 +39,7 @@ from src.patchcore.extract import extract_patch_embeddings, is_vit_backbone
 from src.patchcore.metrics import auroc
 from src.patchcore.patchcore import PatchCoreModel, to_numpy
 from src.patchcore.pro import compute_pro_auc
+from src.utils.random import make_numpy_rng, set_global_seed
 
 
 def pixel_auroc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -73,7 +74,9 @@ def main() -> None:
     ap.add_argument("--max-train", type=int, default=0, help="If set, cap number of nominal train images (fast smoke)")
     ap.add_argument("--max-test", type=int, default=0, help="If set, cap number of test images (fast smoke)")
     ap.add_argument("--log-every", type=int, default=50, help="Progress logging cadence (batches)")
+    ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
+    set_global_seed(int(args.seed))
 
     cfg = PatchCoreConfig(
         backbone=str(args.backbone),
@@ -173,7 +176,7 @@ def main() -> None:
     X = np.concatenate(nominal_patches, axis=0)
 
     t0 = time.time()
-    idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio)
+    idx = KCenterGreedy().select(X, ratio=cfg.coreset_ratio, rng=make_numpy_rng(args.seed))
     timing["coreset_s"] = time.time() - t0
     Xc = X[idx]
 
@@ -269,6 +272,7 @@ def main() -> None:
         "memory_bank": {"nominal_patches": int(X.shape[0]), "coreset": int(Xc.shape[0]), "ratio": cfg.coreset_ratio},
         "metrics": {"image_auroc": image_auroc, "pixel_auroc": pixel_auc, "pro_auc": pro_auc},
         "timing": timing,
+        "seed": int(args.seed),
     }
 
     out_path = Path(args.out)

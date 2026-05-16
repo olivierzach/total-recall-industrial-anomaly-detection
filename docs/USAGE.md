@@ -15,13 +15,13 @@ python3 scripts/mvtec_get.py --archive data/raw/mvtec_ad.zip --out data/mvtec
 ### On your own nominal folder (recommended)
 
 ```bash
-python3 scripts/fit_nominal_patchcore.py --nominal /path/to/nominal --device cpu --out outputs/models/my_product
+python3 scripts/fit_nominal_patchcore.py --nominal /path/to/nominal --device cpu --seed 0 --out outputs/models/my_product
 ```
 
 ### On MVTec (benchmark)
 
 ```bash
-python3 scripts/fit_mvtec_patchcore.py --mvtec-root data/mvtec --category bottle --device cpu --out outputs/models/bottle
+python3 scripts/fit_mvtec_patchcore.py --mvtec-root data/mvtec --category bottle --device cpu --seed 0 --out outputs/models/bottle
 ```
 
 ## 3) Evaluate on MVTec test split
@@ -48,12 +48,19 @@ python3 scripts/viz_anomaly_maps.py --images /path/to/images --maps outputs/maps
 Calibrate an operational threshold from nominal calibration images:
 
 ```bash
-python3 scripts/calibrate_threshold.py --scores outputs/scores.jsonl --target-fpr 0.001
+python3 scripts/calibrate_threshold.py --scores outputs/scores.jsonl --target-fpr 0.001 --out outputs/threshold.json
+python3 scripts/score_images.py --model outputs/models/bottle --images /path/to/images --threshold outputs/threshold.json --out outputs/scored_with_decisions.jsonl
 ```
 
 Output JSONL example:
 ```json
 {"path":"/path/to/img.png","score":1.234}
+```
+
+Optional explanation output for the highest-scoring patches:
+```bash
+python3 scripts/score_images.py --model outputs/models/bottle --images /path/to/images \
+  --top-k-neighbors 3 --top-k-patches 3 --out outputs/scores_with_explanations.jsonl
 ```
 
 ## 5) Gather nominal images from the web (optional)

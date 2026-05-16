@@ -28,9 +28,15 @@ class PatchCoreModel:
         patch_embeddings: [P,D]
         returns: [P] distances to nearest nominal patch
         """
-        dists, _ = self.nn.kneighbors(patch_embeddings, return_distance=True)
+        dists, _ = self.query(patch_embeddings)
         # For k>1, could aggregate; for now use nearest.
         return dists[:, 0]
+
+    def query(self, patch_embeddings: np.ndarray, n_neighbors: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+        if n_neighbors is None:
+            n_neighbors = int(self.cfg.num_neighbors)
+        dists, inds = self.nn.kneighbors(patch_embeddings, n_neighbors=n_neighbors, return_distance=True)
+        return dists, inds
 
     def score_image(self, patch_embeddings: np.ndarray) -> float:
         s = self.score_patches(patch_embeddings)

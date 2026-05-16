@@ -23,6 +23,8 @@ A model directory containing:
 - `config.json`
 - `memory_bank.npy` (coreset of nominal patch embeddings)
 - `backbone_state.pt` (the exact backbone weights used to build the memory bank)
+- `memory_metadata.json` (source image + patch location for each stored nominal patch)
+- `artifact_info.json` (training seed and other lightweight metadata)
 
 This artifact is what you deploy to score new images.
 
@@ -49,6 +51,7 @@ python3 scripts/fit_nominal_patchcore.py \
   --nominal /data/nominal_widgets_camA \
   --out outputs/models/widgets_camA \
   --device cpu \
+  --seed 0 \
   --image-size 256 \
   --coreset-ratio 0.02
 ```
@@ -74,7 +77,8 @@ Take a *separate* nominal set from a different day/shift (same product/camera), 
 
 ```bash
 python3 scripts/score_images.py --model outputs/models/widgets_camA --images /data/nominal_calib_camA --out outputs/calib.jsonl
-python3 scripts/calibrate_threshold.py --scores outputs/calib.jsonl --target-fpr 0.001
+python3 scripts/calibrate_threshold.py --scores outputs/calib.jsonl --target-fpr 0.001 --out outputs/widgets_camA_threshold.json
+python3 scripts/score_images.py --model outputs/models/widgets_camA --images /data/new_widgets_camA --threshold outputs/widgets_camA_threshold.json --out outputs/scored.jsonl
 ```
 
 Interpretation:
