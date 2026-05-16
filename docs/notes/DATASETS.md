@@ -76,7 +76,11 @@ BTAD (BeanTech Anomaly Detection Dataset) can be downloaded without login via Da
 python3 scripts/btad_get.py --out data/btad
 ```
 
-This fetches a tar in Supervisely project format (see `docs/BTAD.md`).
+This fetches a tar in Supervisely project format (see `docs/BTAD.md`). By default we store the downloaded archive under `data/raw/` and extract into `data/btad/`.
+
+### Disk hygiene
+
+If you already have a complete extracted dataset under `data/btad/` (e.g., `data/btad/train/img`, `data/btad/test/img`, etc.), you can delete the large raw archive (commonly named like `data/raw/btad-DatasetNinja.tar`) and re-fetch it later by re-running `scripts/btad_get.py`.
 
 Recommended workflow:
 1) Download the dataset archive manually (or from your company mirror).
