@@ -41,4 +41,5 @@ Start here:
 - `docs/QUERY_ADAPTIVE_MEMORY.md` (query-adaptive nominal selection; patch vs image routing)
 - `docs/IVF.md` (what IVF indexing is; how it maps to PatchCore retrieval)
 - `docs/DEFECT_BANK_UNSUPERVISED.md` (cluster anomalies to bootstrap defect memory bank)
+- `docs/LIGHTING_AND_CAPTURE.md` (lighting/camera risks + early go/no-go tests)
 - `docs/RELATED_WORK.md`
