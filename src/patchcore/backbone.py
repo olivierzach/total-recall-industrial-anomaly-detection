@@ -40,27 +40,50 @@ class FeatureHooks:
         self._handles = []
 
 
+def _weights_enum_name(model_name: str) -> str:
+    # torchvision convention examples:
+    #   wide_resnet50_2 -> Wide_ResNet50_2_Weights
+    #   vit_b_16        -> ViT_B_16_Weights
+    parts = model_name.split("_")
+    nice = []
+    for p in parts:
+        if p.lower() == "vit":
+            nice.append("ViT")
+        elif len(p) == 1 and p.isalpha():
+            nice.append(p.upper())
+        else:
+            # Handle common cases like "resnet" -> "ResNet".
+            pl = p.lower()
+            if pl.startswith("resnet") and len(p) > 6:
+                nice.append("ResNet" + p[6:])
+            else:
+                nice.append(p[:1].upper() + p[1:])
+    return "_".join(nice) + "_Weights"
+
+
 def load_backbone(name: str, pretrained: bool = True) -> nn.Module:
-    # Torchvision model loader.
+    """Load a torchvision backbone.
+
+    Supports CNNs (e.g. wide_resnet50_2) and ViTs (e.g. vit_b_16).
+
+    We keep this self-contained and use torchvision's Weights enums when available.
+    """
+
     if not hasattr(torchvision.models, name):
         raise KeyError(f"torchvision.models has no attribute {name}")
     ctor = getattr(torchvision.models, name)
 
-    # Handle torchvision weights API.
     kwargs = {}
-    try:
-        if pretrained:
-            # e.g. Wide_ResNet50_2_Weights.DEFAULT
-            weights_enum = getattr(torchvision.models, f"{name.title().replace('_', '')}_Weights", None)
-            if weights_enum is not None:
-                kwargs["weights"] = weights_enum.DEFAULT
-            else:
-                kwargs["pretrained"] = True
+    if pretrained:
+        weights_enum = getattr(torchvision.models, _weights_enum_name(name), None)
+        if weights_enum is not None:
+            kwargs["weights"] = weights_enum.DEFAULT
         else:
-            kwargs["weights"] = None
-    except Exception:
-        if pretrained:
+            # Older torchvision
             kwargs["pretrained"] = True
+    else:
+        # Newer torchvision uses weights=None.
+        kwargs["weights"] = None
 
     model = ctor(**kwargs)
     model.eval()

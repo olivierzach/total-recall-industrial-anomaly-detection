@@ -71,11 +71,17 @@ def main() -> None:
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--num-workers", type=int, default=2)
     ap.add_argument("--coreset-ratio", type=float, default=0.02)
-    ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"])
+    ap.add_argument("--backbone", type=str, default="wide_resnet50_2", help="torchvision backbone (e.g. wide_resnet50_2, vit_b_16)")
+    ap.add_argument("--layers", type=str, nargs="*", default=["layer2", "layer3"], help="feature layers to hook (CNN only; for ViT we will default later)")
     ap.add_argument("--image-size", type=int, default=256)
     args = ap.parse_args()
 
-    cfg = PatchCoreConfig(layers=tuple(args.layers), image_size=int(args.image_size), coreset_ratio=float(args.coreset_ratio))
+    cfg = PatchCoreConfig(
+        backbone=str(args.backbone),
+        layers=tuple(args.layers),
+        image_size=int(args.image_size),
+        coreset_ratio=float(args.coreset_ratio),
+    )
     device = torch.device(args.device)
 
     tfm = transforms.Compose(

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class PatchCoreConfig:
     # Backbone
-    backbone: str = "wide_resnet50_2"  # torchvision model name
+    backbone: str = "wide_resnet50_2"  # torchvision model name (e.g. wide_resnet50_2, vit_b_16)
     pretrained: bool = True
 
     # Feature layers to hook (torchvision naming). For WRN50_2, these are safe defaults.

@@ -21,6 +21,7 @@ PatchCore:
 - Added pytest suite for core utilities.
 - Next: pixel-level anomaly maps + PRO metric + second dataset pipeline.
 - Added QA workflow doc: `docs/QA_WORKFLOW.md`.
+- Added ViT backbone scaffolding doc: `docs/VIT.md`.
 
 ### M1 — Minimal baseline
 - [x] Dataset loader: MVTec AD (train=nominal, test=mixed)
