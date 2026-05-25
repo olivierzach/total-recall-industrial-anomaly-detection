@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Total Recall Industrial Anomaly Demo</title>
+    <link rel="stylesheet" href="./assets/app.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">two-head memory bank</p>
+          <h1>Industrial anomaly triage</h1>
+          <p class="lede">
+            A static demo of the repo's inspection loop: nominal retrieval, anomaly scoring,
+            known-failure lookup, and explicit unknown-defect rejection.
+          </p>
+        </div>
+        <div class="score-card">
+          <span>inspection state</span>
+          <strong id="state-label">known failure</strong>
+          <small id="state-detail">nominal distance 0.82 / failure margin 1.31</small>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="controls">
+          <label>
+            defect intensity
+            <input id="intensity" type="range" min="0" max="100" value="66" />
+          </label>
+          <label>
+            anomaly threshold
+            <input id="threshold" type="range" min="25" max="95" value="58" />
+          </label>
+          <label>
+            failure-bank match
+            <input id="match" type="range" min="0" max="100" value="73" />
+          </label>
+          <div class="legend">
+            <span><i class="nominal"></i> nominal support</span>
+            <span><i class="anomaly"></i> anomaly evidence</span>
+            <span><i class="failure"></i> known-failure support</span>
+          </div>
+        </aside>
+
+        <div class="inspection">
+          <div class="panel">
+            <div class="panel-head">
+              <span>query image</span>
+              <strong id="query-score">0.82</strong>
+            </div>
+            <canvas id="query" width="520" height="360"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <span>anomaly heatmap</span>
+              <strong id="heat-score">active</strong>
+            </div>
+            <canvas id="heatmap" width="520" height="360"></canvas>
+          </div>
+          <div class="panel support">
+            <div class="panel-head">
+              <span>nearest supports</span>
+              <strong id="support-score">3 hits</strong>
+            </div>
+            <div id="supports" class="supports"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="./assets/app.js"></script>
+  </body>
+</html>
