@@ -8,15 +8,15 @@ The benchmark question is:
 
 > Compared with a nominal-only PatchCore-style detector, does adding a known-failure memory bank improve operational usefulness while preserving open-set behavior on unseen defect families?
 
-## Local data available now
+## Benchmark Data Used By This Plan
 
 ### Primary benchmark dataset
 
 - `data/mvtec/bottle`
 
-Why this is the cleanest benchmark in the current repo:
+Why this is the cleanest benchmark for this repo:
 
-- it is already present locally
+- it is easy to stage under `data/mvtec/bottle`
 - it has three explicit defect families
   - `broken_large`
   - `broken_small`
@@ -25,7 +25,7 @@ Why this is the cleanest benchmark in the current repo:
 
 ### Why BTAD is not the primary benchmark here
 
-BTAD is present locally, but in the current repo state it is not yet the best dataset for this hybrid benchmark because the local setup does not expose a clean fine-grained failure taxonomy comparable to MVTec bottle’s named defect families. BTAD remains useful for exploratory out-of-domain probing in the UI.
+BTAD can be staged under `data/btad`, but it is not yet the best dataset for this hybrid benchmark because the public labels used here do not expose a clean fine-grained failure taxonomy comparable to MVTec bottle's named defect families. BTAD remains useful for exploratory out-of-domain probing in the UI.
 
 ## Protocol
 
@@ -132,13 +132,13 @@ Artifacts written:
 - `summary.json`
 - `summary.md`
 
-Current local benchmark output path:
+Benchmark output path:
 
 - `outputs/hybrid_benchmark/mvtec_bottle/summary.md`
 
-## Current local snapshot
+## Recorded Snapshot
 
-Executed on the local `data/mvtec/bottle` copy with:
+Recorded from an MVTec bottle run with:
 
 - backbone: `resnet18`
 - image size: `160`
@@ -190,4 +190,4 @@ Once the first benchmark is stable, the next research-grade ablations should be:
 2. support descriptor variants
 3. class-specific thresholds vs global threshold
 4. backbone swap: `resnet18` vs stronger pretrained features
-5. day/shift/camera split when real plant data is available
+5. site/camera/time split when deployment data is available

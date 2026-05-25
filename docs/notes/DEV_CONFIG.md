@@ -29,8 +29,8 @@ During development:
 - `--max-train 256`
 - `--max-test 256`
 
-### Mac mini GPU note
-If you are on the Apple Silicon Mac mini, prefer a dedicated Python 3.11 venv and run from a normal shell / `tmux` when using `--device mps`. In the sandboxed agent runtime on this machine, `mps_built=True` but `mps_available=False`.
+### Apple Silicon GPU note
+If you are using `--device mps`, prefer a dedicated Python 3.11+ environment and verify both `torch.backends.mps.is_built()` and `torch.backends.mps.is_available()` before longer runs.
 
 ## Example commands
 

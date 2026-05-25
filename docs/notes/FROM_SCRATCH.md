@@ -7,7 +7,7 @@ This is the practical path for getting PatchCore running on a **new computer** a
 - git
 
 Optional (Mac GPU): Apple Silicon + PyTorch MPS (see `docs/GPU_ACCEL.md`).
-On the tested Mac mini setup, the most reliable MPS path was a dedicated Python 3.11 env run from a normal shell / `tmux`.
+For MPS, use a dedicated Python 3.11+ environment and verify MPS availability before longer runs.
 
 ## 1) Install
 
@@ -23,7 +23,7 @@ pip install -U pip
 pip install -e .
 ```
 
-Mac mini GPU (tested path):
+Apple Silicon GPU path:
 
 ```bash
 python3.11 -m venv .venv311
@@ -83,5 +83,5 @@ See `scripts/viz_anomaly_maps.py`.
 ## Troubleshooting
 
 - If `--device mps` errors, fall back to `--device cpu`.
-- If `mps_built=True` but `mps_available=False`, verify you are running from a normal local shell / `tmux`; the sandboxed agent runtime on this machine could not access MPS even though the hardware supported it.
+- If `mps_built=True` but `mps_available=False`, verify that the active Python environment and terminal session can access Metal, or fall back to `--device cpu`.
 - If you’re on Linux with an NVIDIA GPU, use `--device cuda`.

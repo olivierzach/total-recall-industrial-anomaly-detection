@@ -38,9 +38,9 @@ This prototype adds that second stage without changing the baseline code:
 - `hybrid_memory_demo/fit_folder_hybrid_memory.py`
   - CLI to fit a hybrid artifact from your own folder layout
 - `hybrid_memory_demo/run_mvtec_bottle_demo.py`
-  - real dataset example on `data/mvtec/bottle`
+  - public benchmark example on `data/mvtec/bottle`
 - `hybrid_memory_demo/run_btad_demo.py`
-  - real dataset example on `data/btad`
+  - public benchmark example on `data/btad`
 - `hybrid_memory_demo/web.py`
   - lightweight browser UI with multi-dataset artifact switching
 - `hybrid_memory_demo/app.html`
@@ -54,9 +54,9 @@ This prototype adds that second stage without changing the baseline code:
 - `hybrid_memory_demo/SETUP_KNOWN_FAILURES.md`
   - step-by-step guide for setting up the known-failure bank on your own data
 
-## Real dataset demos
+## Public Benchmark Demos
 
-This prototype now ships with two local demo profiles:
+This prototype supports two public benchmark demo profiles:
 
 - `MVTec AD / bottle`
   - known failures: `broken_large`, `broken_small`
@@ -64,7 +64,7 @@ This prototype now ships with two local demo profiles:
 - `BTAD / component-conditioned defects`
   - BTAD only exposes `ok/ko`, so the demo uses component-conditioned labels (`component_01`, `component_02`) as the known failure bank
   - held-out unknown component anomalies default to `component_03`
-  - the viewer manifest points at the stronger local BTAD profile: `wide_resnet50_2`, `layer3`, `image_size=256`, `coreset_ratio=0.01`
+  - the viewer manifest points at the stronger BTAD profile: `wide_resnet50_2`, `layer3`, `image_size=256`, `coreset_ratio=0.01`
   - interpret BTAD primarily as an open-set support-family retrieval problem:
     - `status_accuracy`, `known_failure_recall`, `unknown_anomaly_recall`, and `novel_as_known_rate` are the primary metrics
     - `known_label_accuracy` is secondary because the labels are support-family identifiers rather than named defect semantics
@@ -165,7 +165,7 @@ For the full process, see:
   - input image
   - threshold-aware anomaly heatmap
   - embedding-space heatmap relative to the nearest retrieved failure memory
-- BTAD should be treated carefully: the local export does not provide named defect families, so the BTAD demo labels are component-conditioned anomaly families rather than defect semantics.
+- BTAD should be treated carefully: the labels available to this demo are ok/ko rather than named defect families, so the BTAD demo labels are component-conditioned anomaly families rather than defect semantics.
 - The viewer now surfaces the protocol explicitly:
   - MVTec uses `Predicted Label`
   - BTAD uses `Predicted Support Family`

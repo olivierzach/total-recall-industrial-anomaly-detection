@@ -1,6 +1,6 @@
-# GPU acceleration on Mac mini (Apple Silicon)
+# GPU acceleration on Apple Silicon
 
-This repo can use the Mac mini GPU via **PyTorch MPS**.
+This repo can use Apple Silicon GPUs via **PyTorch MPS**.
 
 ## Why MPS (not MLX)
 - MLX is great for transformer experimentation, but torchvision backbones + the broader PyTorch ecosystem are easiest via **MPS**.
@@ -9,23 +9,11 @@ This repo can use the Mac mini GPU via **PyTorch MPS**.
 ## Requirements
 - Apple Silicon Mac
 - PyTorch built with MPS support
-- A normal local shell / tmux session that can access Metal
+- A terminal session that can access Metal
 
-## What we found on the Mac mini
+## Environment Checks
 
-Tested machine:
-- Apple M4 Pro Mac mini
-- macOS 15.3.1
-
-Observed behavior:
-- `torch.backends.mps.is_built() == True` in both Python 3.14 and Python 3.11 environments
-- `torch.backends.mps.is_available() == False` inside the sandboxed agent runtime
-- `torch.backends.mps.is_available() == True` outside the sandbox in a normal shell / `tmux` session using a fresh Python 3.11 venv
-
-Conclusion:
-- The Mac mini and PyTorch build are MPS-capable.
-- The blocker was the **execution environment**, not the hardware.
-- For reliable MPS runs on this machine, use a normal terminal or `tmux`, not the sandboxed agent runtime.
+MPS availability depends on both the PyTorch build and the active execution environment. Check both before launching longer jobs.
 
 Quick check:
 
@@ -37,7 +25,7 @@ print('mps_built', torch.backends.mps.is_built())
 PY
 ```
 
-Recommended tested environment on this machine:
+Recommended environment:
 
 ```bash
 python3.11 -m venv .venv311
@@ -63,7 +51,7 @@ python3 scripts/eval_btad_patchcore.py \
   --out outputs/btad_smoke_vit_mps.json
 ```
 
-MVTec smoke on the Mac mini GPU:
+MVTec smoke on Apple Silicon:
 
 ```bash
 .venv311/bin/python scripts/eval_mvtec_patchcore.py \

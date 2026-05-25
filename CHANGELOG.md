@@ -12,6 +12,6 @@ Rationale: git history is the source of truth, but a curated log helps when youâ
 
 - Implement PRO metric (region-based localization metric) and integrate into BTAD eval output.
 - Add dev fast-iteration documentation and commands.
-- Add Mac mini GPU acceleration notes (PyTorch MPS) and a measured benchmark + speed compare tool.
+- Add Apple Silicon GPU acceleration notes (PyTorch MPS) and a measured benchmark + speed compare tool.
 - Add docs for from-scratch setup and fitting/scoring on your own nominal image folder.
 - Add learned reference selection plan doc.

@@ -85,7 +85,7 @@ def _entry_note(entry: DemoEntry) -> str:
     if dataset == "btad":
         return (
             entry.note
-            or "BTAD is shown here with component-conditioned failure labels because the local dataset exposes ok/ko labels rather than named defect families."
+            or "BTAD is shown here with component-conditioned failure labels because this demo uses ok/ko labels rather than named defect families."
         )
     if dataset == "mvtec":
         return entry.note or "MVTec profile with named defect families."

@@ -155,7 +155,7 @@ If you do not provide `--examples-json`, the app still works for uploads. If you
 
 The included MVTec bottle demo is useful for the product concept, but it is not a final classifier:
 
-- only one MVTec category is currently stored locally in this repo
+- the included demo currently uses one MVTec category
 - failure-class separation is still fairly simple
 - known-class accuracy depends heavily on support diversity
 

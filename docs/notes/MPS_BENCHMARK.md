@@ -1,6 +1,6 @@
 # MPS acceleration benchmark (BTAD)
 
-This doc records measured speedups from using **PyTorch MPS** on the Mac mini.
+This doc records measured speedups from using **PyTorch MPS** on Apple Silicon.
 
 ## Setup
 - Dataset: BTAD
@@ -48,4 +48,3 @@ python3 scripts/eval_btad_patchcore.py --btad-root data/btad --device mps --batc
   --max-train 256 --max-test 256 --log-every 10 \
   --out outputs/speed_mps_vit_smoke.json
 ```
-

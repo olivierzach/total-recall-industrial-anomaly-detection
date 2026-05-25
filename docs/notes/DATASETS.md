@@ -30,7 +30,7 @@ MVTec AD has licensing/terms and is typically downloaded from the official MVTec
 The official downloads page currently provides both the full archive and per-category archives.
 
 This repo provides a helper script that can:
-- download from a **user-provided URL** (e.g. your internal mirror / signed URL), and/or
+- download from a **user-provided authorized URL**, and/or
 - unpack an existing local archive.
 
 Run:
@@ -83,7 +83,7 @@ This fetches a tar in Supervisely project format (see `docs/BTAD.md`). By defaul
 If you already have a complete extracted dataset under `data/btad/` (e.g., `data/btad/train/img`, `data/btad/test/img`, etc.), you can delete the large raw archive (commonly named like `data/raw/btad-DatasetNinja.tar`) and re-fetch it later by re-running `scripts/btad_get.py`.
 
 Recommended workflow:
-1) Download the dataset archive manually (or from your company mirror).
+1) Download the dataset archive manually (or from an authorized mirror).
 2) Place it somewhere like `data/raw/mvtec_ad.zip`.
 3) Extract to `data/mvtec`:
 

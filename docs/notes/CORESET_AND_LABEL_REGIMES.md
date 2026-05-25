@@ -378,19 +378,19 @@ In that regime, the problem starts to move away from pure one-class anomaly dete
 
 That is exactly why the known-failure memory-bank direction is attractive.
 
-## 8) What does our own local benchmark say?
+## 8) What does the benchmark snapshot say?
 
-We now have a local benchmark on real `MVTec bottle` data:
+We now have a benchmark snapshot on public `MVTec bottle` data:
 
-- protocol doc: [HYBRID_EXPERIMENT_PLAN.md](docs/HYBRID_EXPERIMENT_PLAN.md)
-- current summary: [summary.md](outputs/hybrid_benchmark/mvtec_bottle/summary.md)
+- protocol doc: [HYBRID_EXPERIMENT_PLAN.md](HYBRID_EXPERIMENT_PLAN.md)
+- generated summary path: `outputs/hybrid_benchmark/mvtec_bottle/summary.md`
 
 The most important result is not the absolute AUROC. It is the tradeoff:
 
 - adding a known-failure bank improves recognition of recurring known defect families
 - but the current implementation also increases the tendency to force unseen failures into known classes
 
-For example, with `support/class = 8` on the current local run:
+For example, with `support/class = 8` on the recorded run:
 
 - `known_failure_recall` rises strongly over the nominal-only baseline
 - `known_label_accuracy` becomes meaningful

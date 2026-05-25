@@ -1,6 +1,6 @@
-# Towards Total Recall in Industrial Anomaly Detection (PatchCore) — local implementation
+# Towards Total Recall in Industrial Anomaly Detection (PatchCore)
 
-This repo is a practical, local re-implementation + experimentation harness for:
+This repo is a practical re-implementation and experimentation harness for:
 
 - **Roth et al. (CVPR 2022)**: *Towards Total Recall in Industrial Anomaly Detection* (a.k.a. **PatchCore**)
   - arXiv: https://arxiv.org/abs/2106.08265
@@ -19,9 +19,9 @@ This repo is a practical, local re-implementation + experimentation harness for:
   - latency / memory trade-offs
   - domain shifts, new products, few-shot updates
 
-## Current Repo Evidence
+## Reproducible Benchmark Evidence
 
-This repo already contains fitted artifacts and saved experiment outputs under `outputs/`.
+The repository includes scripts and notes for reproducing these benchmark snapshots. Generated datasets, fitted models, and run outputs are written under ignored `data/` and `outputs/` paths and are not intended to be tracked.
 
 - **MVTec bottle baseline:** `outputs/ablations/mvtec_full_bottle_layer3_euclidean_c01.json`
   - `wide_resnet50_2`, `layer3`, coreset `0.01`
@@ -29,7 +29,7 @@ This repo already contains fitted artifacts and saved experiment outputs under `
 - **BTAD rigor suite:** `outputs/rigor/btad_suite_layer3_c01/`
   - `knn_euclidean.json`: image AUROC `0.8812`, pixel AUROC `0.7872`, PRO AUC `0.2127`, recall `0.6034` at ~1% target FPR
   - `knn_rp256_euclidean.json`: image AUROC `0.8966`, pixel AUROC `0.7901`, PRO AUC `0.2118`, much faster coreset build than raw euclidean
-- **Saved fitted models:** `outputs/models/`
+- **Generated fitted models:** `outputs/models/`
   - nominal-only banks such as `outputs/models/bottle_layer3_kmeans_c01`
   - routed nominal bank such as `outputs/models/bottle_routed_smoke`
   - BTAD nominal banks such as `outputs/models/btad_nominal_kmeans_c01_layer3`
@@ -144,7 +144,7 @@ In code terms, the two-head system is therefore:
 
 That decomposition is a key design choice in this repo: the first head protects recall on anything off-nominal, while the second head adds practical failure-family lookup without collapsing the whole system into a closed-world classifier.
 
-Current saved evidence for that direction:
+Recorded evidence for that direction:
 
 - **Hybrid benchmark:** `outputs/hybrid_benchmark/mvtec_bottle/summary.md`
   - baseline nominal-only status accuracy: `0.482`
@@ -172,13 +172,12 @@ Interpretation:
 
 - New machine + your own nominal images: `docs/notes/FROM_SCRATCH.md`
 - Fast dev iteration: `docs/notes/DEV_CONFIG.md`
-- Mac mini GPU (MPS): `docs/notes/GPU_ACCEL.md`
+- Apple Silicon GPU (MPS): `docs/notes/GPU_ACCEL.md`
 - Sweeps (BTAD): `docs/notes/SWEEPS.md`
 - Datasets + official MVTec links: `docs/notes/DATASETS.md`
 
-Mac mini note:
-- MPS works on the tested Apple Silicon machine when launched from a normal shell / `tmux`.
-- The sandboxed agent runtime may report `mps_available=False` even though the machine itself supports MPS.
+MPS note:
+- MPS support depends on the PyTorch build and the execution environment; verify with `torch.backends.mps.is_available()` before running longer jobs.
 
 ## Next steps
 

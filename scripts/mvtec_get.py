@@ -4,7 +4,7 @@
 MVTec AD is commonly distributed under terms that may require manual download.
 
 This helper supports:
-- downloading from a provided URL (e.g., internal mirror / signed URL), and
+- downloading from a provided authorized URL, and
 - extracting a local archive (.zip / .tar.*) into a target directory.
 
 Examples:
